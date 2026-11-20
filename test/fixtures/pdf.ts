@@ -42,6 +42,11 @@ export interface PdfOptions {
   encrypted?: boolean;
   /** Layers switched off in the default view. */
   hidden?: string[];
+  /**
+   * Leave the layer list out of the catalog, as a tool that joins sheets into
+   * one file does: each page still names its layers in its own resources.
+   */
+  noCatalogLayers?: boolean;
 }
 
 type Point = [number, number];
@@ -272,7 +277,7 @@ export function buildPdf(pages: PageSpec[], options: PdfOptions = {}): Buffer {
     .join(' ');
   objects.set(
     1,
-    `<< /Type /Catalog /Pages 2 0 R${layerNames.length ? ` /OCProperties << /OCGs [${ocgs}] /D << /Order [${ocgs}]${off ? ` /OFF [${off}]` : ''} >> >>` : ''} >>`,
+    `<< /Type /Catalog /Pages 2 0 R${layerNames.length && !options.noCatalogLayers ? ` /OCProperties << /OCGs [${ocgs}] /D << /Order [${ocgs}]${off ? ` /OFF [${off}]` : ''} >> >>` : ''} >>`,
   );
   objects.set(
     2,

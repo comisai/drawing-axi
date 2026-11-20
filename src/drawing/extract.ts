@@ -26,6 +26,8 @@ const MAX_LABELS = 200_000;
 const MAX_FORM_DEPTH = 12;
 /** The longest side a sheet may have, in points: 200 inches at a unit of 20. */
 const MAX_SHEET = 288_000;
+/** The most layers a sheet learns from its pages when the catalog lists none. */
+const MAX_LAYERS = 10_000;
 /** The most picture boxes a sheet keeps; the count goes on past it. */
 const MAX_PICTURES = 5000;
 /** Cells along each side when measuring how much pictures cover. */
@@ -272,6 +274,22 @@ export function readSheet(
     }
     const dict = doc.dict(target);
     if (!dict) return -1;
+    // A layer the catalog does not list: a tool that joins sheets into one
+    // file drops the list, and each page still names its own layers.
+    const type = dict.get('Type');
+    if (
+      target instanceof Ref &&
+      type instanceof Name &&
+      type.name === 'OCG' &&
+      layers.length < MAX_LAYERS
+    ) {
+      byObject.set(target.num, layers.length);
+      layers.push({
+        name: doc.text(dict.get('Name')) ?? `layer ${layers.length + 1}`,
+        hidden: false,
+      });
+      return layers.length - 1;
+    }
     const groups = dict.get('OCGs');
     if (groups instanceof Ref) return ocLayer(groups);
     const list = doc.resolve(groups ?? null);

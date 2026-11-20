@@ -21,7 +21,7 @@ It was built to run inside Comis, and it also works on its own.
 ## Requirements
 
 - Node.js 22.18 or later.
-- Drawings plotted to PDF from the CAD file (vector PDF). A scan or a photo holds no lines to measure, and the tool says so. So does a print of the drawing through a PDF printer, where the drawing becomes picture tiles under a few real lines such as the column grid: `info` says how much of the page pictures cover, `measure` warns, and `render` shows where the pictures are.
+- Drawings plotted to PDF from the CAD file (vector PDF), one sheet a page; a file that joins several sheets works too, `--page` picks one. A scan or a photo holds no lines to measure, and the tool says so. So does a print of the drawing through a PDF printer, where the drawing becomes picture tiles under a few real lines such as the column grid: `info` says how much of the page pictures cover, `measure` warns, and `render` shows where the pictures are.
 
 ## Install
 

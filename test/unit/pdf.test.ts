@@ -328,3 +328,19 @@ describe('text', () => {
     assert.equal(map.get(0x21), 'Y');
   });
 });
+
+it('Joined sheets: a page that names its layers only in its own resources keeps them', () => {
+  const joined = readSheet(
+    PdfDocument.open(sampleDrawing({ noCatalogLayers: true })),
+    0,
+  );
+  const plain = readSheet(PdfDocument.open(sampleDrawing()), 0);
+  const names = (sheet: typeof plain) =>
+    [...new Set(sheet.strokes.map((s) => sheet.layers[s.layer]?.name))].sort();
+  assert.deepEqual(names(joined), names(plain));
+  assert.ok(names(joined).includes('SEWER'));
+  assert.equal(
+    joined.strokes.filter((s) => s.layer < 0).length,
+    plain.strokes.filter((s) => s.layer < 0).length,
+  );
+});
