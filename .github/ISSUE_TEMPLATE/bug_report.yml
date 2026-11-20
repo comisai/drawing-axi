@@ -1,0 +1,43 @@
+name: Bug report
+description: Something drawing-axi does wrong.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Do not attach a real drawing: it belongs to the people who made it. Show the problem with a made-up sheet, or describe it in words and numbers.
+        For a security problem, use the private report described in SECURITY.md instead.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The output of `drawing-axi --version`, or the commit.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Node.js version and operating system, and whether it ran inside Comis.
+      placeholder: Node 22.18, macOS 15, outside Comis
+  - type: input
+    id: source
+    attributes:
+      label: Where the PDF came from
+      description: The program that made it, as `drawing-axi info` prints under made_by.
+      placeholder: AutoCAD LT 2026 / pdfplot17
+  - type: textarea
+    id: command
+    attributes:
+      label: Command and output
+      description: The command you ran and what it printed, with project and client names replaced.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+      description: For a wrong length or count, what a person measured.
+    validations:
+      required: true

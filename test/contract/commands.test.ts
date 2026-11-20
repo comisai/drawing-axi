@@ -1,0 +1,522 @@
+// Every command, run as a separate process against the sample drawing. Set
+// DRAWING_AXI_BIN=dist to run the built package instead of the source.
+
+import assert from 'node:assert/strict';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { join } from 'node:path';
+import { before, describe, it } from 'node:test';
+import { EXPECT, PLAN, REVIEW_NOTE } from '../fixtures/sample.ts';
+import {
+  body,
+  fixtureFolder,
+  type Ran,
+  rowsOf,
+  runBinary,
+} from '../helpers.ts';
+
+let dir: string;
+const run = (...args: string[]): Promise<Ran> => runBinary(args, dir);
+const ok = async (...args: string[]) => {
+  const r = await run(...args);
+  assert.equal(r.code, 0, `${args.join(' ')}: ${r.stdout}`);
+  assert.equal(r.stderr, '', args.join(' '));
+  return body(r.stdout);
+};
+const fails = async (code: string, exit: number, ...args: string[]) => {
+  const r = await run(...args);
+  const doc = body(r.stdout);
+  assert.equal(doc.code, code, `${args.join(' ')}: ${r.stdout}`);
+  assert.equal(r.code, exit, args.join(' '));
+  assert.equal(r.stderr, '', args.join(' '));
+  assert.equal(typeof doc.message, 'string');
+  assert.match(String(doc.usage), /^drawing-axi/);
+  return doc;
+};
+
+const GROUPS = [
+  '--group',
+  'sewer=SEWER',
+  '--group',
+  'rain=RAIN',
+  '--group',
+  'fire=FIRE',
+  '--group',
+  'water=WATER@#0000ff',
+  '--region',
+  PLAN,
+];
+
+before(() => {
+  // The process reports its folder with links resolved.
+  dir = realpathSync(fixtureFolder());
+});
+
+describe('home', () => {
+  it('lists the PDF files in the folder', async () => {
+    const doc = await ok();
+    assert.equal(doc.summary, '4 PDF files in this folder');
+    const rows = rowsOf(doc, 'drawings');
+    assert.deepEqual(
+      rows.map((r) => r.file),
+      ['locked.pdf', 'plan-packed.pdf', 'plan.pdf', 'scan.pdf'],
+    );
+    const plan = rows.find((r) => r.file === 'plan.pdf');
+    assert.deepEqual(plan, {
+      file: 'plan.pdf',
+      pages: 2,
+      sheet: '494 x 317 mm',
+      layers: EXPECT.layers,
+      comments: 25,
+    });
+    assert.equal(rows[0]?.sheet, 'not readable');
+  });
+
+  it('says so in a folder with no drawings', async () => {
+    const r = await runBinary([], join(dir, '..'), { HOME: dir });
+    assert.equal(r.code, 0);
+    // The parent of a fresh temporary folder may hold PDFs of its own.
+    assert.match(String(body(r.stdout).summary), /PDF files? in this folder$/);
+  });
+});
+
+describe('info and scale', () => {
+  it('describes a sheet', async () => {
+    const doc = await ok('info', 'plan.pdf');
+    assert.equal(doc.file, 'plan.pdf');
+    assert.equal(doc.page, '1 of 2');
+    assert.equal(doc.sheet, '494 x 317 mm');
+    assert.equal(
+      doc.scale,
+      '1:100, 27.78 pt per m (stated ratio, refined by the scale bar)',
+    );
+    assert.equal(doc.layers, `${EXPECT.layers} (1 switched off)`);
+    assert.equal(doc.labels, '24 stroke-font, 1 font text, 1 notes');
+    assert.equal(doc.size_labels, '9 (4 written along runs)');
+    assert.equal(doc.notes, undefined);
+  });
+
+  it('reads another page, and says what a page lacks', async () => {
+    const doc = await ok('info', 'plan.pdf', '--page', '2');
+    assert.equal(doc.page, '2 of 2');
+    assert.match(
+      String(doc.scale),
+      /^1:50, 56\.69 pt per m \(stated ratio; no scale bar/,
+    );
+    const scan = await ok('info', 'scan.pdf');
+    assert.match(
+      String((scan.notes as string[])[0]),
+      /^This page is a picture/,
+    );
+    assert.match(String(scan.scale), /^not stated on the sheet/);
+  });
+
+  it('explains the scale', async () => {
+    const doc = await ok('scale', 'plan.pdf');
+    assert.equal(doc.scale, '1:100');
+    assert.equal(doc.pt_per_m, 27.78);
+    assert.equal(doc.plotted_at, '98% of the stated scale');
+    assert.match(String(doc.scale_bar), /^10 m in 10 cells at x=1090 y=820$/);
+    const given = await ok('scale', 'plan.pdf', '--pt-per-m', '30');
+    assert.equal(given.pt_per_m, 30);
+    assert.equal(given.basis, 'points per metre given by flag');
+  });
+});
+
+describe('layers and legend', () => {
+  it('lists layers with the run length on each', async () => {
+    const doc = await ok('layers', 'plan.pdf', '--region', PLAN);
+    assert.equal(doc.summary, '8 layers with ink, longest runs first');
+    const rows = rowsOf(doc, 'layers');
+    const by = (name: string) => rows.find((r) => r.layer === name);
+    assert.equal(by('SEWER')?.run_m, EXPECT.sewer.total);
+    assert.equal(by('RAIN')?.run_m, EXPECT.rain.total);
+    assert.equal(by('FIRE')?.run_m, EXPECT.fire.total);
+    assert.equal(by('WATER')?.run_m, EXPECT.water.total + EXPECT.water.branch);
+    assert.equal(by('WATER')?.color, '#0000ff +1');
+    assert.equal(by('OLD (switched off)')?.run_m, 25);
+    assert.equal(by('TEXT')?.color, '#000000');
+  });
+
+  it('splits a layer by colour and filters by name', async () => {
+    const doc = await ok(
+      'layers',
+      'plan.pdf',
+      '--split',
+      '--match',
+      'water',
+      '--region',
+      PLAN,
+    );
+    assert.deepEqual(rowsOf(doc, 'layers'), [
+      { layer: 'WATER', run_m: 9, strokes: 2, color: '#0000ff' },
+      { layer: 'WATER', run_m: 3, strokes: 1, color: '#00ffff' },
+    ]);
+  });
+
+  it('pairs the legend with layers', async () => {
+    const doc = await ok('legend', 'plan.pdf');
+    assert.deepEqual(
+      rowsOf(doc, 'legend').map((r) => [r.text, r.layer, r.color]),
+      [
+        ['צנרת ביוב', 'SEWER', '#ff00ff'],
+        ['צנרת ניקוז מי גשם', 'RAIN', '#00bfff'],
+        ['צנרת מים כבוי אש (F)', 'FIRE', '#ff0000'],
+        ['צנרת מים קרים', 'WATER', '#00ffff'],
+      ],
+    );
+  });
+});
+
+describe('labels and tags', () => {
+  it('groups labels, with counts', async () => {
+    const doc = await ok('labels', 'plan.pdf', '--match', '^Ø');
+    assert.deepEqual(
+      rowsOf(doc, 'labels').map((r) => [r.text, r.count]),
+      [
+        ['Ø110', 3],
+        ['Ø75', 2],
+        ['Ø110-2%', 1],
+        ['Ø160-1%', 1],
+        ['Ø200-1%', 1],
+      ],
+    );
+    assert.equal(doc.also, '1 font text labels not shown; add --source all');
+  });
+
+  it('lists labels one by one, in reading order, with their place', async () => {
+    const doc = await ok('labels', 'plan.pdf', '--match', 'צנרת', '--each');
+    const rows = rowsOf(doc, 'labels');
+    assert.equal(rows.length, 4);
+    assert.deepEqual(rows[0], {
+      text: 'צנרת ביוב',
+      x: 1280,
+      y: 110,
+      source: 'shx',
+    });
+    const text = await ok('labels', 'plan.pdf', '--source', 'text', '--each');
+    assert.deepEqual(rowsOf(text, 'labels')[0], {
+      text: 'NOTE A',
+      x: 92,
+      y: 76,
+      source: 'text',
+    });
+  });
+
+  it('keeps Latin notes and decodes Hebrew ones', async () => {
+    const doc = await ok(
+      'labels',
+      'plan.pdf',
+      '--region',
+      '200,80,700,120',
+      '--each',
+    );
+    assert.deepEqual(
+      rowsOf(doc, 'labels').map((r) => r.text),
+      ['פתח 200X20 ס"מ', 'l=15.90', '(HDPE)'],
+    );
+  });
+
+  it('counts the sizes the labels name', async () => {
+    const doc = await ok('labels', 'plan.pdf', '--sizes');
+    assert.deepEqual(rowsOf(doc, 'sizes'), [
+      { size: 'Ø110', labels: 4, along_runs: 1 },
+      { size: 'Ø75', labels: 2, along_runs: 0 },
+      { size: '3"', labels: 1, along_runs: 1 },
+      { size: 'Ø160', labels: 1, along_runs: 1 },
+      { size: 'Ø200', labels: 1, along_runs: 1 },
+    ]);
+  });
+
+  it('pairs riser tags with sizes', async () => {
+    const doc = await ok('tags', 'plan.pdf');
+    assert.equal(doc.summary, '5 tags with a size, in 2 series and sizes');
+    assert.deepEqual(rowsOf(doc, 'tags'), [
+      { series: 'G', size: 'Ø75', count: EXPECT.tags.G, tags: 'G1 G2' },
+      { series: 'O', size: 'Ø110', count: EXPECT.tags.O, tags: 'O1 O2 O3' },
+    ]);
+    const each = await ok('tags', 'plan.pdf', '--each', '--match', 'O|Ø');
+    assert.deepEqual(rowsOf(each, 'tags')[0], {
+      tag: 'O1',
+      size: 'Ø110',
+      x: 700,
+      y: 300,
+    });
+  });
+});
+
+describe('runs and measure', () => {
+  it('lists runs with their ends', async () => {
+    const doc = await ok(
+      'runs',
+      'plan.pdf',
+      '--layer',
+      'SEWER',
+      '--region',
+      PLAN,
+    );
+    assert.equal(doc.summary, '4 runs, 43 m in all, longest first');
+    const rows = rowsOf(doc, 'runs');
+    assert.deepEqual(
+      rows.map((r) => r.length_m),
+      [20, 10, 8, 5],
+    );
+    assert.equal(rows[0]?.from, '100,200');
+    assert.equal(rows[0]?.to, '656,200');
+    assert.equal(rows[0]?.group, 'SEWER');
+  });
+
+  it('measures groups by pipe size', async () => {
+    const doc = await ok('measure', 'plan.pdf', ...GROUPS);
+    assert.equal(doc.summary, '4 groups, 79 m in 7 runs');
+    assert.deepEqual(rowsOf(doc, 'groups'), [
+      { group: 'sewer', length_m: 43, runs: 4, sized_m: 38, unsized_m: 5 },
+      { group: 'rain', length_m: 12, runs: 1, sized_m: 12, unsized_m: 0 },
+      { group: 'fire', length_m: 15, runs: 1, sized_m: 0, unsized_m: 15 },
+      { group: 'water', length_m: 9, runs: 1, sized_m: 9, unsized_m: 0 },
+    ]);
+    assert.deepEqual(rowsOf(doc, 'sizes'), [
+      { group: 'sewer', size: 'Ø160', length_m: 30, labelled_m: 20, runs: 2 },
+      { group: 'sewer', size: 'Ø200', length_m: 8, labelled_m: 8, runs: 1 },
+      {
+        group: 'sewer',
+        size: 'unsized',
+        length_m: 5,
+        labelled_m: null,
+        runs: 1,
+      },
+      { group: 'rain', size: 'Ø110', length_m: 12, labelled_m: 12, runs: 1 },
+      {
+        group: 'fire',
+        size: 'unsized',
+        length_m: 15,
+        labelled_m: null,
+        runs: 1,
+      },
+      { group: 'water', size: '3"', length_m: 9, labelled_m: 9, runs: 1 },
+    ]);
+  });
+
+  it('gives the same answer for a packed, compressed copy', async () => {
+    const plain = await ok('measure', 'plan.pdf', ...GROUPS);
+    const packed = await ok('measure', 'plan-packed.pdf', ...GROUPS);
+    assert.deepEqual(packed.groups, plain.groups);
+    assert.deepEqual(packed.sizes, plain.sizes);
+  });
+
+  it('measures by the scale it is given', async () => {
+    const doc = await ok(
+      'measure',
+      'plan.pdf',
+      '--layer',
+      'RAIN',
+      '--region',
+      PLAN,
+      '--scale',
+      '1:50',
+    );
+    // At 1:50 the same bar is five metres, so it still sets the factor.
+    assert.equal(
+      doc.scale,
+      '1:50, 55.56 pt per m (given ratio, refined by the scale bar)',
+    );
+    assert.equal(rowsOf(doc, 'groups')[0]?.length_m, 6);
+  });
+
+  it('leaves out what --exclude names', async () => {
+    const all = await ok('measure', 'plan.pdf', '--layer', 'SEWER');
+    assert.equal(
+      rowsOf(all, 'groups')[0]?.length_m,
+      45.2,
+      'with the legend sample',
+    );
+    const cut = await ok(
+      'measure',
+      'plan.pdf',
+      '--layer',
+      'SEWER',
+      '--exclude',
+      '1000,0,1400,900',
+    );
+    assert.equal(rowsOf(cut, 'groups')[0]?.length_m, 43);
+  });
+
+  it('saves every run as JSON', async () => {
+    const doc = await ok(
+      'measure',
+      'plan.pdf',
+      ...GROUPS,
+      '--save',
+      'takeoff.json',
+    );
+    assert.equal(doc.saved, join(dir, 'takeoff.json'));
+    const saved = JSON.parse(readFileSync(join(dir, 'takeoff.json'), 'utf8'));
+    assert.equal(saved.file, 'plan.pdf');
+    assert.equal(saved.scale.ratio, 100);
+    assert.equal(saved.runs.length, 7);
+    assert.deepEqual(saved.runs[0], {
+      group: 'sewer',
+      layer: 'SEWER',
+      size: 'Ø160',
+      basis: 'label',
+      length_m: 20,
+      from: [100, 200],
+      to: [655.6, 200],
+    });
+    assert.deepEqual(saved.sizes, doc.sizes);
+  });
+});
+
+describe('symbols and render', () => {
+  it('counts symbols by kind', async () => {
+    const doc = await ok('symbols', 'plan.pdf', '--layer', 'SYMBOLS');
+    assert.equal(doc.summary, '6 symbols in 2 kinds, most frequent first');
+    assert.deepEqual(rowsOf(doc, 'symbols'), [
+      {
+        size: '0.2 x 0.2 m',
+        parts: 1,
+        count: EXPECT.squares,
+        first_at: '400,320',
+      },
+      {
+        size: '0.36 x 0.31 m',
+        parts: 2,
+        count: EXPECT.triangles,
+        first_at: '420,380',
+      },
+    ]);
+  });
+
+  it('writes a picture, and replaces one only when told to', async () => {
+    const doc = await ok(
+      'render',
+      'plan.pdf',
+      '--layer',
+      'SEWER',
+      '--layer',
+      'RAIN',
+      '--region',
+      '50,150,700,650',
+      '--labels',
+      '--grid',
+      '--out',
+      'crop.svg',
+    );
+    assert.equal(doc.wrote, join(dir, 'crop.svg'));
+    assert.match(String(doc.picture), /^1600 x 1231 px, \d+ bytes$/);
+    assert.match(String(doc.shows), /^2 layers, \d+ strokes, \d+ labels$/);
+    const svg = readFileSync(join(dir, 'crop.svg'), 'utf8');
+    assert.match(svg, /^<svg /);
+    assert.match(svg, /stroke="#ff00ff"/);
+    assert.match(svg, />Ø160-1%</);
+    await fails('exists', 1, 'render', 'plan.pdf', '--out', 'crop.svg');
+    await ok('render', 'plan.pdf', '--out', 'crop.svg', '--force');
+    assert.ok(existsSync(join(dir, 'crop.svg')));
+  });
+});
+
+describe('errors', () => {
+  it('refuses what it cannot read, and says what to do', async () => {
+    await fails('not_found', 1, 'info', 'missing.pdf');
+    const notPdf = await fails('not_pdf', 1, 'info', 'notes.txt');
+    assert.match(String(notPdf.message), /not a PDF/);
+    const locked = await fails('encrypted', 1, 'layers', 'locked.pdf');
+    assert.match(String(locked.message), /qpdf --decrypt/);
+    const page = await fails('no_page', 1, 'info', 'plan.pdf', '--page', '9');
+    assert.equal(page.pages, 2);
+    await fails('scale_unknown', 1, 'scale', 'scan.pdf');
+  });
+
+  it('names an unknown layer and suggests near ones', async () => {
+    const doc = await fails(
+      'unknown_layer',
+      1,
+      'measure',
+      'plan.pdf',
+      '--layer',
+      'SEW',
+    );
+    assert.match(
+      String(doc.message),
+      /no layer named `SEW`\. Layers that contain it: SEWER\./,
+    );
+    const lower = await ok(
+      'measure',
+      'plan.pdf',
+      '--layer',
+      'sewer',
+      '--region',
+      PLAN,
+    );
+    assert.equal(
+      rowsOf(lower, 'groups')[0]?.length_m,
+      43,
+      'case is forgiven when unambiguous',
+    );
+  });
+
+  it('refuses bad input as a usage error', async () => {
+    await fails('usage', 2, 'frobnicate');
+    await fails('usage', 2, 'info');
+    await fails('usage', 2, 'info', 'plan.pdf', 'extra.pdf');
+    await fails('usage', 2, 'layers', 'plan.pdf', '--bogus');
+    await fails('usage', 2, 'layers', 'plan.pdf', '--limit', '0');
+    await fails(
+      'usage',
+      2,
+      'layers',
+      'plan.pdf',
+      '--limit',
+      '5',
+      '--limit',
+      '6',
+    );
+    await fails('usage', 2, 'layers', 'plan.pdf', '--region', '1,2,3');
+    await fails('usage', 2, 'labels', 'plan.pdf', '--match', '(');
+    await fails('usage', 2, 'labels', 'plan.pdf', '--source', 'pencil');
+    await fails('usage', 2, 'measure', 'plan.pdf');
+    await fails('usage', 2, 'measure', 'plan.pdf', '--group', 'sewer');
+    await fails(
+      'usage',
+      2,
+      'measure',
+      'plan.pdf',
+      '--layer',
+      'SEWER',
+      '--scale',
+      'big',
+    );
+    await fails('usage', 2, 'symbols', 'plan.pdf');
+    await fails('usage', 2, 'render', 'plan.pdf');
+    await fails('usage', 2, 'render', 'plan.pdf', '--out', 'picture.png');
+  });
+
+  it('stops at the deadline it is given', async () => {
+    const late = await runBinary(['layers', 'plan.pdf'], dir, {
+      COMIS_DEADLINE: '1000000000000',
+    });
+    assert.equal(body(late.stdout).code, 'timed_out');
+    assert.equal(late.code, 1);
+    const odd = await runBinary(['layers', 'plan.pdf'], dir, {
+      COMIS_DEADLINE: 'soon',
+    });
+    assert.equal(body(odd.stdout).code, 'usage');
+    assert.equal(odd.code, 2);
+    const fine = await runBinary(['layers', 'plan.pdf'], dir, {
+      COMIS_DEADLINE: String(Date.now() + 60_000),
+    });
+    assert.equal(fine.code, 0);
+  });
+
+  it('shows a long note cut, and whole with --full', async () => {
+    const cut = await ok('labels', 'plan.pdf', '--source', 'note');
+    const shown = String(rowsOf(cut, 'labels')[0]?.text);
+    assert.match(
+      shown,
+      new RegExp(
+        ` … \\(truncated, ${REVIEW_NOTE.length} code points total; use --full to see all\\)$`,
+      ),
+    );
+    const whole = await ok('labels', 'plan.pdf', '--source', 'note', '--full');
+    assert.equal(rowsOf(whole, 'labels')[0]?.text, REVIEW_NOTE);
+  });
+});

@@ -1,0 +1,15 @@
+{
+  "tolerance": 0.1,
+  "size_tolerance": 0.25,
+  "sheets": [
+    {
+      "file": "/absolute/path/to/a-drawing.pdf",
+      "exclude": ["1000,0,1400,900"],
+      "groups": { "sewer": "SEWER", "water": "WATER@#0000ff" },
+      "reference": { "sewer": 43.0, "water": 9.0 },
+      "sizes": { "sewer": { "Ø160": 30.0 } },
+      "legend_rows": 4,
+      "labels_include": ["a text the sheet holds"]
+    }
+  ]
+}
