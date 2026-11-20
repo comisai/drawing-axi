@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| Status | `drawing-axi` is released: 0.1.0 and 0.1.1 are on npm with signed provenance (2026-11-20), and the live gate passes on eight real sheets. The Comis pack is merged (M6, comisai/comis#4517): the apps pack ships `drawing-axi` and the `drawing-takeoff` skill. The keyed live test in Comis passed on its third run (M7, comisai/comis#4518): a real model returned a workbook with every length of the made-up sheet right. Next: the owner's first real request (M9), drawings from other offices (M8), and the next version from a real worker run's findings. |
+| Status | `drawing-axi` 0.1.3 is on npm with signed provenance (0.1.0 to 0.1.3 released 2026-11-20). It is tested on 27 real sheets from three design offices: two offices' plots measure within 10% of people's bills at the default settings; the third office's prints are pictures, and the tool now says so. The Comis apps pack pins it, and a real model through the whole Comis stack drafted a real level's bill of quantities and answered nine Hebrew questions about the drawings. Next: the owner's own install (M9), and the work list in the implementation plan §7.3. |
 | Date | 2026-11-20 |
 | Design | `drawing-axi-design.md` |
 | Implementation plan | `drawing-axi-implementation-plan.md` (tasks T1 to T30, test plan) |
@@ -36,14 +36,16 @@ Updated 2026-11-20.
 | Commands and AXI runtime | **Done** | 123 tests on source, 58 on the built package |
 | Damaged and hostile files | **Done** | A fuzz run found one file that never finished; geometry far outside the sheet is now dropped. 4,000 damaged files each end in a known error or a read sheet |
 | Skill dry run | **Done** | A worker with only the Comis skill, the tool and the sample sheet got every length right and ignored an instruction planted on the sheet; its notes led to nine fixes in the tool |
-| Live gate | **Done on one office** | 61 pass, 0 fail, 11 blocked; blocked stages are floor sheets with no pipe to measure |
+| Live gate | **Done on three offices** | Office 1, eight sheets: 61 pass, 0 fail, 11 blocked. Offices 1 and 2, three blind takeoffs of real levels: totals within 1–3% of people's bills; by system within 10% except fire (+16.5%). Office 3, eight sheets: prints whose drawing is pictures, reported as such |
 | Repository and CI | **Done** | `comisai/drawing-axi` is public; `main` needs a pull request and green checks on Node 22 and 24; `v*` tags are admin-only; the `npm` environment deploys only from them |
 | Release 0.1.0 on npm | **Done** | Published 2026-11-20 by `release.yml` from tag `v0.1.0`. The provenance names this repository, the tag and the workflow. `npm audit signatures` verifies it. The live gate on the installed package: 61 pass, 0 fail, 11 blocked |
 | Real-sheet worker run | **Done** | A fresh worker with the released package and the Comis skill drafted a bill of quantities from a real level: 2,290 m in 15 groups, 37 rows, every gap listed. A first run led to ten fixes before the release; the second run's notes are the next version's work list (implementation plan §7.3) |
 | Keyed live test in Comis | **Done** | Scenario `drawing-campaign` (comisai/comis#4518), `claude-sonnet-5-5`, record K4518. Run 1: every length right, but the chief of staff declared a Markdown output, so no workbook came back; its delegation guidance was fixed. Run 2: a workbook, five of six rows; a coded label written in a break of a line of another group was kept off that line; fixed in 0.1.1. Run 3: pass, in one minute and USD 0.17 |
+| Keyed tests on real drawings | **Done** | Record K4525 (comisai/comis#4525): a real level's two sheets, nine Hebrew questions and a takeoff. Answers right on scale, fire-station count, gas, ceiling height (not on the plan), sprinkler heads (not drawn), the picture plan (refused, CAD plot asked for) and the comparison with the surveyor's workbook; the bill of quantities matched the person's within 3% on five of seven systems. Findings fixed in Comis: the per-call bound for long contexts, a workbook output, citing every file of a request, and handing drawing measures to a worker |
 | Release 0.1.1 on npm | **Done** | A label written in a break of a line sizes that line whatever the groups are called; `labels_apart` has one row for each way a label is written. Comis pins 0.1.1 in comisai/comis#4518 |
 | Comis pack and skill | **Done** | comisai/comis#4517, merged 2026-11-20: the pack entry pinned to the published checksum, the skill, the decision record, the recorded provenance and the tests. The static gate and the pack stages passed on x64 and arm64 |
-| Other design offices | Not started | M8: needs drawings |
+| Other design offices | **Done** | Two more offices' drawings came with people's bills (A2). One plots like the first; its findings led to 0.1.2. The other sends prints through a PDF printer, which cannot be measured; the tool says so and asks for the CAD plot |
+| Edge cases | **Done** | Every command on truncated, byte-flipped, empty, encrypted and renamed files, a joined two-sheet file, a right-to-left file name and a 200-character name: each ends in a known error in about 0.1 s, or works. The joined file lost its layers; fixed in 0.1.3 |
 
 ## 3. Workstreams
 
@@ -69,7 +71,7 @@ A milestone is done only when its gate passes. Every gate is a command or a proo
 | M5 | Release 0.1.0 | B | M4, A1 | `npm view drawing-axi dist.attestations` names this repository; the live gate passes on the installed package | **Done 2026-11-20** |
 | M6 | Comis decision and pack | D | M5 | The decision record, C1 to C5 merged; the pack builds and its doctor finds the exact version; `pnpm gate` green | **Done 2026-11-20** (comisai/comis#4517; static gate and pack stages, see the pull request for the tiers) |
 | M7 | Comis live test | D | M6 | C6: a scripted stage with the pack installed; a live scenario in which a real model produces a takeoff of the made-up sheet with every length right; then the owner's run on a test stack with a real drawing | **Live scenario passed 2026-11-20** (comisai/comis#4518, three keyed runs, USD 0.50 in all). The owner's run with a real drawing is M9 |
-| M8 | Other offices | C | M5, A2 | The live gate passes on drawings from at least two more design offices, or the gaps are named and `info` reports them | Needs A2 |
+| M8 | Other offices | C | M5, A2 | The live gate passes on drawings from at least two more design offices, or the gaps are named and `info` reports them | **Done 2026-11-20** (one office measured; one reported as pictures) |
 | M9 | The owner uses it | D | M7 | One real bill of quantities drafted through the chief of staff on the owner's own install | After M7 |
 | M10 | Later features | E | M8 | Each by demand, with a drawn test and a live check | Later |
 
@@ -105,7 +107,7 @@ These are estimates for one developer from 20 November 2026. They exclude review
 | M5 | **Done 20 Nov** | |
 | M6 | **Done 20 Nov** | |
 | M7 | **Done 20 Nov** (the live scenario) | |
-| M8 | When drawings arrive | The owner has drawings from other offices (A2) |
+| M8 | **Done 20 Nov** | |
 | M9 | After M7 | The owner's install has the apps pack |
 
 ## 7. Owner actions

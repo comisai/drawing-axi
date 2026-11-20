@@ -98,11 +98,11 @@ Production code is about 6,300 lines, of which the reader is 1,400; tests and fi
 | --- | --- |
 | Reader, extraction, labels, scale, runs, sizes, tags, symbols, legend, picture | Done |
 | Eleven commands and the AXI runtime | Done |
-| Tests on source | 123 pass |
-| Tests on the built package | 58 pass |
+| Tests on source | 139 pass |
+| Tests on the built package | 67 pass |
 | Live gate on eight real sheets | 61 pass, 0 fail, 11 blocked (stages with no reference given) |
 | Repository and CI | Done (T23) |
-| Release | Done (T24, T25): `drawing-axi@0.1.0` and `0.1.1` are on npm with signed provenance; the live gate passes on the installed package |
+| Release | Done (T24, T25): 0.1.0 to 0.1.3 are on npm with signed provenance; the live gate passes on the installed package |
 | Comis pack and skill | T26 to T29 done: merged as comisai/comis#4517. T30 done: the keyed live scenario passed on its third run (comisai/comis#4518) |
 
 ### M1: the reader
