@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| Status | Built. 0.1.0 passes its tests and the live gate on eight real sheets (2026-11-20). Release and the Comis pack are in the [master plan](drawing-axi-master-plan.md). |
+| Status | Built and merged. 0.1.0 passes its tests and the live gate on eight real sheets (2026-11-20). Release and the Comis pack are in the [master plan](drawing-axi-master-plan.md). |
 | Date | 2026-11-20 |
 | Implementation plan | `drawing-axi-implementation-plan.md` |
 | Master plan | `drawing-axi-master-plan.md` |
@@ -154,7 +154,8 @@ A layer is named exactly, or without regard to case when that is unambiguous. `L
 - **Streams.** Flate, LZW, ASCIIHex, ASCII85 and RunLength, with PNG and TIFF predictors. A stream's declared length is trusted only when `endstream` follows it (F15).
 - **Pages.** The page tree with inherited resources, boxes and rotation; the crop box inside the media box; the user unit.
 - **Content.** Path, paint, colour, graphics-state, text and marked-content operators; form XObjects to 12 levels; inline images skipped. Curves are flattened to eight chords.
-- **Refused.** Encrypted files, unknown stream filters, files over 256 MB, pages with more than 12 million path coordinates, streams that decode to more than 256 MB. Each error names what to do.
+- **Refused.** Encrypted files, unknown stream filters, files over 256 MB, pages with more than 12 million path coordinates, streams that decode to more than 256 MB, and a page whose size is not usable. Each error names what to do.
+- **Dropped.** Strokes, fills and labels more than one sheet away from the sheet, and labels larger than the sheet: they come from damaged files, and would make later steps walk an absurd area. `info` counts them under `notes`.
 - **Not read.** Clipping, patterns and shadings, image contents, and annotations' appearance streams.
 
 ### 7.2 Labels

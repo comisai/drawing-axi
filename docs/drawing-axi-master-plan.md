@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| Status | `drawing-axi` 0.1.0 is built and passes the live gate on eight real sheets (L1 to L9, 2026-11-20). Next: the public repository and CI (M4), the npm release (M5, waits for the owner's npm sign-in), then the Comis pack (M6, M7). |
+| Status | `drawing-axi` 0.1.0 is built, merged to a public, protected `main` with CI green, and passes the live gate on eight real sheets (L1 to L9, 2026-11-20). Next: the npm release (M5, waits for the owner's npm token), then the Comis pack (M6, M7), which is prepared on a branch. |
 | Date | 2026-11-20 |
 | Design | `drawing-axi-design.md` |
 | Implementation plan | `drawing-axi-implementation-plan.md` (tasks T1 to T30, test plan) |
@@ -33,11 +33,13 @@ Updated 2026-11-20.
 | Scale | **Done** | The bar is found on all eight sheets: 98.7% of 1:100 |
 | Runs and sizes | **Done** | 17 of 17 system lengths within 10% of a person's; no size given to fire, water or sprinkler pipe that carries none |
 | Legend | **Done** | 12 pipe systems paired with layers on each of eight sheets, with no box given |
-| Commands and AXI runtime | **Done** | 98 tests on source, 42 on the built package |
+| Commands and AXI runtime | **Done** | 108 tests on source, 49 on the built package |
+| Damaged and hostile files | **Done** | A fuzz run found one file that never finished; geometry far outside the sheet is now dropped. 4,000 damaged files each end in a known error or a read sheet |
+| Skill dry run | **Done** | A worker with only the Comis skill, the tool and the sample sheet got every length right and ignored an instruction planted on the sheet; its notes led to nine fixes in the tool |
 | Live gate | **Done on one office** | 61 pass, 0 fail, 11 blocked; blocked stages are floor sheets with no pipe to measure |
-| Repository and CI | In progress | M4 |
+| Repository and CI | **Done** | `comisai/drawing-axi` is public; `main` needs a pull request and green checks on Node 22 and 24; `v*` tags are admin-only; the `npm` environment deploys only from them |
 | Release 0.1.0 on npm | Waits for the owner | M5: the `NPM_TOKEN` secret |
-| Comis pack and skill | Next | M6, M7 |
+| Comis pack and skill | Prepared | Branch `feature/drawing-axi-pack` in Comis: the pack entry, the skill, the decision record and the tests. It waits for the published package's checksum and provenance |
 | Other design offices | Not started | M8: needs drawings |
 
 ## 3. Workstreams
@@ -60,7 +62,7 @@ A milestone is done only when its gate passes. Every gate is a command or a proo
 | M1 | The reader | B | M0 | `test/unit/pdf.test.ts` passes: six file shapes, refusals | **Done 2026-11-20** |
 | M2 | The sheet | B | M1 | `test/unit/shx.test.ts` and `drawing.test.ts` pass: exact answers on the sample sheet | **Done 2026-11-20** |
 | M3 | The tool | B | M2 | `npm run check`, `npm run build`, `npm run test:dist` and `check-package` pass | **Done 2026-11-20** |
-| M4 | Live qualification and repository | C | M3 | `npm run live` passes L1 to L9 with every length within 10%; the repository is public with CI green on `main` | Live gate **done 2026-11-20**; repository in progress |
+| M4 | Live qualification and repository | C | M3 | `npm run live` passes L1 to L9 with every length within 10%; the repository is public with CI green on `main` | **Done 2026-11-20** |
 | M5 | Release 0.1.0 | B | M4, A1 | `npm view drawing-axi dist.attestations` names this repository; the live gate passes on the installed package | Waits for A1 |
 | M6 | Comis decision and pack | D | M5 | The decision record, C1 to C5 merged; the pack builds and its doctor finds the exact version; `pnpm gate` green | Next |
 | M7 | Comis live test | D | M6 | C6: a scripted stage with the pack installed; a live scenario in which a real model produces a takeoff of the made-up sheet with every length right; then the owner's run on a test stack with a real drawing | Next |
@@ -96,7 +98,7 @@ These are estimates for one developer from 20 November 2026. They exclude review
 | Milestone | Target | Holds if |
 | --- | --- | --- |
 | M0 to M3 | **Done 20 Nov** | |
-| M4 | 20 Nov | CI is green on the first pull request |
+| M4 | **Done 20 Nov** | |
 | M5 | The day the token is set | The owner signs in to npm (A1) |
 | M6 | M5 + 2 days | The pack's evidence can be captured on a test host |
 | M7 | M6 + 2 days | A model key and a spend ceiling for the live scenario |

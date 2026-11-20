@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| Status | T1 to T22 done (2026-11-20). T23 to T30 are the release and the Comis pack. |
+| Status | T1 to T23 done (2026-11-20). T24 and T25 are the release; T26 to T30 are the Comis pack, prepared on a branch. |
 | Date | 2026-11-20 |
 | Design | `drawing-axi-design.md` |
 | Master plan | `drawing-axi-master-plan.md` (milestones, gates, owner actions) |
@@ -31,6 +31,8 @@ A prototype of about 490 lines of Python, on the PDF library already in the Comi
 | P8 | The legend's sample lines are on the systems' own layers. | A `legend` command pairs captions with layers. It was not in the first design, and it removes most of the guessing about which layer is which. |
 | P9 | Samples in the legend and title block add 2 to 4 m to each layer. | `--region` and `--exclude` on every measuring command. |
 | P10 | A general PDF library was not needed: the files use a small part of the format. | An own reader of about 1,400 lines (design §4, option E). It reads a sheet in 0.1 to 0.3 seconds, against 2.3 for the prototype. |
+| P11 | A fuzz run found a damaged file that never finished: a label box with an absurd coordinate made one loop walk that whole distance. | Strokes, fills and labels more than one sheet away from the sheet are dropped and counted; a label larger than the sheet is dropped; a page whose size is not usable is refused. A fixed fuzz test runs with the unit tests. |
+| P12 | A worker following the Comis skill got every number right, but lost commands to gaps in the tool: a refused group name with no reason, no way to measure ink on no layer, no box for the legend, and settings that were only on stdout. | Nine fixes (design §6 and §7.6): a group name is the caller's words, `(no layer)` can be named, `legend` prints its box, `measure` says how many size labels found a run, and `--save` keeps the lines a workbook quotes. |
 
 ## 3. Build order
 
@@ -96,11 +98,12 @@ Production code is about 6,300 lines, of which the reader is 1,400; tests and fi
 | --- | --- |
 | Reader, extraction, labels, scale, runs, sizes, tags, symbols, legend, picture | Done |
 | Eleven commands and the AXI runtime | Done |
-| Tests on source | 98 pass |
-| Tests on the built package | 42 pass |
+| Tests on source | 108 pass |
+| Tests on the built package | 49 pass |
 | Live gate on eight real sheets | 61 pass, 0 fail, 11 blocked (stages with no reference given) |
-| Repository, CI, release workflow | T23 to T25 |
-| Comis pack and skill | T26 to T30 |
+| Repository and CI | Done (T23) |
+| Release | T24, T25: waits for the npm token |
+| Comis pack and skill | T26 to T30: prepared on a Comis branch |
 
 ### M1: the reader
 
@@ -110,7 +113,7 @@ Production code is about 6,300 lines, of which the reader is 1,400; tests and fi
 | T2 | Filters with predictors | Each filter decodes a known sample; an unknown filter is named |
 | T3 | Cross-reference tables, streams, object streams, rebuild | The sample reads the same from six file shapes; a broken table is rebuilt for both kinds |
 | T4 | Pages: inheritance, crop, rotation, user unit | Four rotations and a user unit give the same sheet |
-| T5 | Refusals and bounds | Encrypted, not a PDF, a file cut short, a wrong stream length |
+| T5 | Refusals and bounds | Encrypted, not a PDF, a file cut short, a wrong stream length, content far outside the sheet, an unusable page size; a fixed set of 240 damaged files ends in a known error or a sheet |
 | T6 | Test PDF writer | It produces every shape T3 to T5 need |
 
 ### M2: the sheet
