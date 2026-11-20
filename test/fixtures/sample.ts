@@ -261,6 +261,29 @@ export function oddDrawing(): Buffer {
   return buildPdf([{ width: 800, height: 600, content: c, comments }]);
 }
 
+/**
+ * A sheet whose drawing is a picture, as a print through a PDF printer makes
+ * it: four picture tiles cover the page, and only the column grid and one
+ * label are drawn as lines and text over them. It keeps no layers.
+ */
+export function pictureDrawing(): Buffer {
+  const c = new Content();
+  const tile = (x: number, y: number) =>
+    c.ops.push({
+      kind: 'raw',
+      text: `q 400 0 0 300 ${x} ${y} cm BI /W 1 /H 1 /CS /RGB /BPC 8 ID \xff\x88\x88 EI Q`,
+    });
+  tile(0, 0);
+  tile(400, 0);
+  tile(0, 300);
+  tile(400, 300);
+  c.pen(0xff8888, 0.5);
+  for (const x of [100, 300, 500, 700]) c.line(x, 50, x, 550);
+  for (const y of [100, 300, 500]) c.line(50, y, 750, y);
+  c.text('SCALE 1:100', 600, 560, 10);
+  return buildPdf([{ width: 800, height: 600, content: c }]);
+}
+
 /** A page that is one picture and nothing else, as a scan is. */
 export function scanLike(): Buffer {
   const c = new Content();

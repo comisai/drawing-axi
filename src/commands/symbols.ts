@@ -190,6 +190,7 @@ export function renderCommand(input: CommandInput): string {
   try {
     picture = renderSvg(strokes, shownLabels, {
       ...region,
+      pictures: sheet.pictures,
       width,
       labels: input.values.labels === true,
       grid: input.values.grid === true,

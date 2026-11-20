@@ -53,6 +53,14 @@ export interface Label {
   vertical: boolean;
 }
 
+/** A box on the sheet, in points from the top-left corner. */
+export interface Box {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+
 export interface Sheet {
   page: number;
   pages: number;
@@ -63,6 +71,10 @@ export interface Sheet {
   fills: Fill[];
   labels: Label[];
   images: number;
+  /** Where pictures are drawn, clipped to the sheet; at most a few thousand. */
+  pictures: Box[];
+  /** How much of the sheet pictures cover, from 0 to 1. */
+  pictureShare: number;
   /** Content the reader had to skip, in plain words. */
   skipped: string[];
 }

@@ -9,7 +9,7 @@ drawing-axi info plan.pdf
 drawing-axi info plan.pdf --page 2
 ```
 
-A PDF page is one sheet; every command takes `--page`. Read `layers`, `labels` and `scale`. `notes` appears only when something is missing. A scan says "This page is a picture". A sheet with no layers says to split by colour. Do not measure a sheet whose scale is "not stated" without `--scale`.
+A PDF page is one sheet; every command takes `--page`. Read `layers`, `labels` and `scale`. `notes` appears only when something is missing. A scan says "This page is a picture". A print whose drawing is picture tiles says "Pictures cover 100% of this page: the drawing is a picture"; ask for the CAD plot, since the lines it does hold are only what was drawn over the pictures. A sheet with no layers says to split by colour. Do not measure a sheet whose scale is "not stated" without `--scale`.
 
 ## Which layer is which system?
 

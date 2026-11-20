@@ -54,11 +54,18 @@ before(() => {
 describe('home', () => {
   it('lists the PDF files in the folder', async () => {
     const doc = await ok();
-    assert.equal(doc.summary, '5 PDF files in this folder');
+    assert.equal(doc.summary, '6 PDF files in this folder');
     const rows = rowsOf(doc, 'drawings');
     assert.deepEqual(
       rows.map((r) => r.file),
-      ['locked.pdf', 'odd.pdf', 'plan-packed.pdf', 'plan.pdf', 'scan.pdf'],
+      [
+        'locked.pdf',
+        'odd.pdf',
+        'picture.pdf',
+        'plan-packed.pdf',
+        'plan.pdf',
+        'scan.pdf',
+      ],
     );
     const plan = rows.find((r) => r.file === 'plan.pdf');
     assert.deepEqual(plan, {
@@ -943,5 +950,53 @@ describe('what real sheets showed', () => {
     assert.ok(names(all).includes('XREF|Walls'));
     assert.ok(!names(own).includes('XREF|Walls'));
     assert.equal(names(own).length, names(all).length - 1);
+  });
+});
+
+describe('a sheet whose drawing is a picture', () => {
+  it('says so, and gives no advice to measure by colour', async () => {
+    const doc = await ok('info', 'picture.pdf');
+    assert.equal(doc.pictures, '4, covering 100% of the page');
+    const notes = doc.notes as string[];
+    assert.equal(notes.length, 1);
+    assert.match(
+      notes[0] as string,
+      /^Pictures cover 100% of this page: the drawing is a picture\. A pipe drawn in a picture is not a line, so it is not measured, and `render` shows only where the pictures are\. Ask for the PDF plotted from the CAD file, not a print of it\.$/,
+    );
+    // The plan sheet has no pictures and no such line.
+    const plan = await ok('info', 'plan.pdf');
+    assert.equal(plan.pictures, undefined);
+  });
+
+  it('warns when lengths are measured on it', async () => {
+    const doc = await ok(
+      'measure',
+      'picture.pdf',
+      '--group',
+      'grid=(no layer)',
+    );
+    assert.equal(
+      doc.pictures,
+      'pictures cover 100% of the page; pipes drawn in them are not measured',
+    );
+    // The grid: four lines of 500 points and three of 700, at 1:100.
+    assert.equal(rowsOf(doc, 'groups')[0]?.length_m, 144.6);
+    const plan = await ok('measure', 'plan.pdf', ...GROUPS);
+    assert.equal(plan.pictures, undefined);
+  });
+
+  it('shows where the pictures are in a rendering', async () => {
+    const doc = await ok(
+      'render',
+      'picture.pdf',
+      '--out',
+      'picture.svg',
+      '--force',
+    );
+    assert.match(String(doc.wrote), /picture\.svg$/);
+    const svg = readFileSync(join(dir, 'picture.svg'), 'utf8');
+    assert.equal(svg.match(/class="picture"/g)?.length, 4);
+    // The lines are drawn over the pictures.
+    assert.ok(svg.indexOf('class="picture"') < svg.indexOf('stroke="#ff8888"'));
   });
 });

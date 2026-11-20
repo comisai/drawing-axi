@@ -3,6 +3,7 @@
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import { pictureShare } from '../../src/drawing/extract.ts';
 import { readLegend } from '../../src/drawing/legend.ts';
 import type { Label, Sheet, Stroke } from '../../src/drawing/model.ts';
 import { parseColor } from '../../src/drawing/model.ts';
@@ -296,6 +297,25 @@ describe('runs', () => {
     // Without a bound this is 36 million pairs for each of 4,000 letters.
     assert.ok(performance.now() - started < 3000);
     assert.ok(runs.length >= 1);
+  });
+
+  it('measures how much of the page pictures cover', () => {
+    assert.equal(pictureShare([], 800, 600), 0);
+    // Four tiles of a quarter each, one of them drawn twice.
+    const tiles = [
+      { x0: 0, y0: 0, x1: 400, y1: 300 },
+      { x0: 400, y0: 0, x1: 800, y1: 300 },
+      { x0: 0, y0: 300, x1: 400, y1: 600 },
+      { x0: 0, y0: 300, x1: 400, y1: 600 },
+    ];
+    assert.equal(pictureShare(tiles, 800, 600), 0.75);
+    // A logo in a corner is about a hundredth of the page.
+    const logo = pictureShare(
+      [{ x0: 700, y0: 540, x1: 780, y1: 590 }],
+      800,
+      600,
+    );
+    assert.ok(logo > 0.005 && logo < 0.015, String(logo));
   });
 
   it('knows where a run carries ink', () => {

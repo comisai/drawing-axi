@@ -15,7 +15,7 @@ import {
   Ref,
   Stream,
 } from '../pdf/objects.ts';
-import type { Fill, Label, Layer, Sheet, Stroke } from './model.ts';
+import type { Box, Fill, Label, Layer, Sheet, Stroke } from './model.ts';
 import { decodeLabels, visualToLogical } from './shx.ts';
 
 type Matrix = [number, number, number, number, number, number];
@@ -26,6 +26,39 @@ const MAX_LABELS = 200_000;
 const MAX_FORM_DEPTH = 12;
 /** The longest side a sheet may have, in points: 200 inches at a unit of 20. */
 const MAX_SHEET = 288_000;
+/** The most picture boxes a sheet keeps; the count goes on past it. */
+const MAX_PICTURES = 5000;
+/** Cells along each side when measuring how much pictures cover. */
+const SHARE_CELLS = 100;
+
+/**
+ * How much of a sheet the boxes cover, from 0 to 1, on a grid of cells: a
+ * box covers the cells whose centre it holds. Overlaps count once.
+ */
+export function pictureShare(
+  boxes: readonly Box[],
+  width: number,
+  height: number,
+): number {
+  if (!boxes.length || width <= 0 || height <= 0) return 0;
+  const n = SHARE_CELLS;
+  const cells = new Uint8Array(n * n);
+  let covered = 0;
+  for (const b of boxes) {
+    const c0 = Math.max(0, Math.ceil((b.x0 / width) * n - 0.5));
+    const c1 = Math.min(n - 1, Math.floor((b.x1 / width) * n - 0.5));
+    const r0 = Math.max(0, Math.ceil((b.y0 / height) * n - 0.5));
+    const r1 = Math.min(n - 1, Math.floor((b.y1 / height) * n - 0.5));
+    for (let r = r0; r <= r1; r++)
+      for (let c = c0; c <= c1; c++)
+        if (!cells[r * n + c]) {
+          cells[r * n + c] = 1;
+          covered++;
+        }
+    if (covered === n * n) break;
+  }
+  return covered / (n * n);
+}
 const CURVE_STEPS = 8;
 
 export class DrawingTooLarge extends Error {
@@ -197,6 +230,30 @@ export function readSheet(
   const texts: Label[] = [];
   const skipped = new Set<string>();
   let images = 0;
+  const pictures: Box[] = [];
+  // A picture fills the unit square of its transform.
+  const picture = (ctm: Matrix) => {
+    images++;
+    if (pictures.length >= MAX_PICTURES) return;
+    const xs = [
+      ctm[4],
+      ctm[0] + ctm[4],
+      ctm[2] + ctm[4],
+      ctm[0] + ctm[2] + ctm[4],
+    ];
+    const ys = [
+      ctm[5],
+      ctm[1] + ctm[5],
+      ctm[3] + ctm[5],
+      ctm[1] + ctm[3] + ctm[5],
+    ];
+    const x0 = Math.max(0, Math.min(...xs));
+    const x1 = Math.min(width, Math.max(...xs));
+    const y0 = Math.max(0, Math.min(...ys));
+    const y1 = Math.min(height, Math.max(...ys));
+    if (x1 > x0 && y1 > y0 && Number.isFinite(x0 + x1 + y0 + y1))
+      pictures.push({ x0, y0, x1, y1 });
+  };
   let coords = 0;
   const formCache = new Map<Stream, Uint8Array>();
   const fontCache = new Map<Dict, Font>();
@@ -704,7 +761,7 @@ export function readSheet(
           if (!(target instanceof Stream)) break;
           const subtype = target.dict.get('Subtype');
           if (subtype instanceof Name && subtype.name === 'Image') {
-            images++;
+            picture(gs.ctm);
             break;
           }
           if (!(subtype instanceof Name && subtype.name === 'Form')) break;
@@ -760,7 +817,7 @@ export function readSheet(
             p++;
           }
           lex.pos = Math.min(end, p + 2);
-          images++;
+          picture(gs.ctm);
           break;
         }
         default:
@@ -836,6 +893,8 @@ export function readSheet(
     fills,
     labels: [...comments, ...texts],
     images,
+    pictures,
+    pictureShare: pictureShare(pictures, width, height),
     skipped: outside
       ? [...skipped, `${outside} items far outside the sheet`]
       : [...skipped],
