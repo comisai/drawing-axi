@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| Status | T1 to T23 done (2026-11-20). T24 and T25 are the release; T26 to T30 are the Comis pack, prepared on a branch. |
+| Status | T1 to T30 done (2026-11-20): the tool, the release (0.1.0, then 0.1.1), the Comis pack and the live scenario. §7.3 lists the next version's work. |
 | Date | 2026-11-20 |
 | Design | `drawing-axi-design.md` |
 | Master plan | `drawing-axi-master-plan.md` (milestones, gates, owner actions) |
@@ -98,12 +98,12 @@ Production code is about 6,300 lines, of which the reader is 1,400; tests and fi
 | --- | --- |
 | Reader, extraction, labels, scale, runs, sizes, tags, symbols, legend, picture | Done |
 | Eleven commands and the AXI runtime | Done |
-| Tests on source | 108 pass |
-| Tests on the built package | 49 pass |
+| Tests on source | 123 pass |
+| Tests on the built package | 58 pass |
 | Live gate on eight real sheets | 61 pass, 0 fail, 11 blocked (stages with no reference given) |
 | Repository and CI | Done (T23) |
-| Release | T24, T25: waits for the npm token |
-| Comis pack and skill | T26 to T30: prepared on a Comis branch |
+| Release | Done (T24, T25): `drawing-axi@0.1.0` and `0.1.1` are on npm with signed provenance; the live gate passes on the installed package |
+| Comis pack and skill | T26 to T29 done: merged as comisai/comis#4517. T30 done: the keyed live scenario passed on its third run (comisai/comis#4518) |
 
 ### M1: the reader
 
@@ -194,6 +194,26 @@ A stage with no expectation is `blocked`. `--strict` makes blocked stages fail, 
 ### 7.2 Keeping the sample honest
 
 The sample sheet is drawn from the facts in design §2. When a real drawing shows something new (a file shape, a label habit, a way of drawing a bar), the change adds it to `test/fixtures/` as a drawn case, and says in the pull request what the real file did. A real file is never added.
+
+## 7.3 Findings for the next version
+
+A fresh worker drafted a bill of quantities from a real level (a ceiling sheet and a floor sheet) with the released package and the Comis skill. It measured 2,290 m in 15 groups and listed every gap. Its notes are the work list for the next version. None is a wrong length; each is a place where the worker had to work round the tool.
+
+| Area | Finding | Planned change |
+| --- | --- | --- |
+| Legend | A dashed sample and a sample drawn as a centre line with two side lines were missed or listed twice, and the box stopped short of them and of the fixture samples | Join a sample's dashes before pairing; pair one caption with one sample; grow the box to every caption and sample row |
+| Legend | It names no layer for fixture samples | List symbol samples with their layer, as line samples are |
+| Symbols | A symbol drawn as a fill alone is not counted; the same symbol has a different number of parts on two sheets | Count fills as symbols; add a match by place across two files |
+| Sizes | `labels_apart` shows one label text for several different texts | Done in 0.1.1: one row per text |
+| Sizes | A coded label written in a break of a line was kept for the group of its code, and the line came back unsized (found by the keyed live run) | Done in 0.1.1: a label in a break sizes its line |
+| Sizes | Labels that found no run are counted but not listed | Save them with their place |
+| Sizes | A label with no system code, written between two parallel pipes of different systems, sizes one of them; one such label sized a neighbouring system's run | Report a label that fits two groups about equally as shared, and size neither |
+| Tags | A number in the background's font text was paired with a size; single-letter tags are missed; the frame shape is not reported | Pair within one text source first; allow one-letter identifiers; report the frame |
+| Tags | The help calls every tag a riser tag | Say "tag"; a tag at a pipe's end is not a riser |
+| Runs | Runs under the minimum length are dropped without a total | Print the length left out |
+| Layers | Layers with no ink are not named; `info` has no `--save` | `layers --all`; `info --save` |
+| Picture | `render --labels` draws background font text at the size of its box | Cap the drawn text height |
+| Text | Text drawn as outlines cannot be read | Out of reach for now; `info` should say when a sheet has it |
 
 ## 8. What is not in this plan
 
