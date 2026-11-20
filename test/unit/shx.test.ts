@@ -152,3 +152,32 @@ describe('stroke-font text', () => {
     assert.equal(visualToLogical('(\u05d1\u05d0)'), '(\u05d0\u05d1)');
   });
 });
+
+it('Stroke-font labels: a Latin system code in brackets after Hebrew words stays Latin', () => {
+  const labels = [
+    'mbr, nh dav',
+    'mbr, chuc kprhs auni',
+    'eu xbhev kchuc )o(',
+    'eu xbhev knprhs auni )Do(',
+  ].map((raw) => ({
+    text: raw,
+    raw,
+    source: 'shx' as const,
+    layer: -1,
+    x0: 0,
+    y0: 0,
+    x1: 1,
+    y1: 1,
+    vertical: false,
+  }));
+  decodeLabels(labels);
+  assert.deepEqual(
+    labels.map((l) => l.text),
+    [
+      '\u05e6\u05e0\u05e8\u05ea \u05de\u05d9 \u05d2\u05e9\u05d4',
+      '\u05e6\u05e0\u05e8\u05ea \u05d1\u05d9\u05d5\u05d1 \u05dc\u05e4\u05e8\u05d9\u05d3 \u05e9\u05d5\u05de\u05df',
+      '\u05e7\u05d5 \u05e1\u05e0\u05d9\u05e7\u05d4 \u05dc\u05d1\u05d9\u05d5\u05d1 (O)',
+      '\u05e7\u05d5 \u05e1\u05e0\u05d9\u05e7\u05d4 \u05dc\u05de\u05e4\u05e8\u05d9\u05d3 \u05e9\u05d5\u05de\u05df (OD)',
+    ],
+  );
+});

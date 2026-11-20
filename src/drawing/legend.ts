@@ -142,10 +142,9 @@ export function readLegend(
   }
   let kept = pairs;
   if (options.aligned) {
-    // A legend's samples are one length and start in one column. The column
-    // most captions share is the legend; rows beside it belong to it too.
-    const columnOf = (sample: Sample) =>
-      `${Math.round(sample.x0 / 4)}|${Math.round((sample.x1 - sample.x0) / 4)}`;
+    // A legend's samples are one length and start in one column, to a point
+    // or so as a plotter rounds them. The column whose samples show the most
+    // systems is the legend.
     interface Column {
       labels: Set<Label>;
       /** The layers and colours its samples are drawn in. */
@@ -153,15 +152,19 @@ export function readLegend(
       x0: number;
       length: number;
     }
-    const columns = new Map<string, Column>();
+    const fits = (column: Column, sample: Sample) =>
+      Math.abs(sample.x0 - column.x0) <= 6 &&
+      Math.abs(sample.x1 - sample.x0 - column.length) <=
+        Math.max(4, column.length * 0.1);
+    const columns: Column[] = [];
     for (const { label, sample } of pairs) {
       const kind = `${sample.layer}|${sample.color}`;
-      const column = columns.get(columnOf(sample));
+      const column = columns.find((c) => fits(c, sample));
       if (column) {
         column.labels.add(label);
         column.kinds.add(kind);
       } else
-        columns.set(columnOf(sample), {
+        columns.push({
           labels: new Set([label]),
           kinds: new Set([kind]),
           x0: sample.x0,
@@ -171,7 +174,7 @@ export function readLegend(
     // A legend shows many systems, so its samples differ; a table of notes
     // with ruled lines does not.
     let best: Column | null = null;
-    for (const column of columns.values())
+    for (const column of columns)
       if (
         !best ||
         column.kinds.size > best.kinds.size ||
@@ -180,23 +183,48 @@ export function readLegend(
       )
         best = column;
     if (!best || best.labels.size < 3 || best.kinds.size < 2) return [];
+    const column = best;
+    // Its captions line up on one edge: the left for Latin text, the right
+    // for Hebrew. A row whose caption lines up there belongs to the legend
+    // even when its sample is indented, if the sample is the legend's length.
+    const median = (values: number[]) =>
+      [...values].sort((a, b) => a - b)[
+        Math.floor(values.length / 2)
+      ] as number;
+    const left = median([...column.labels].map((l) => l.x0));
+    const right = median([...column.labels].map((l) => l.x1));
+    const aligned = (label: Label) =>
+      Math.abs(label.x0 - left) <= 4 || Math.abs(label.x1 - right) <= 4;
+    const belongs = ({ label, sample }: { label: Label; sample: Sample }) =>
+      fits(column, sample) ||
+      (aligned(label) &&
+        Math.abs(sample.x1 - sample.x0 - column.length) <=
+          Math.max(4, column.length * 0.1));
+    // The legend runs on while its rows follow each other closely: from the
+    // column's own rows, a row joins when it is within 60 points of the
+    // legend so far. A line of the background plan that happens to cross a
+    // caption's row is neither the legend's length nor in its column.
+    const candidates = pairs.filter(belongs);
     let top = Infinity;
     let bottom = -Infinity;
-    for (const label of best.labels) {
+    for (const label of column.labels) {
       top = Math.min(top, label.y0);
       bottom = Math.max(bottom, label.y1);
     }
-    // A legend's own samples start together and are one length. A line of
-    // the background plan that happens to cross a caption's row is neither.
-    const x0 = best.x0;
-    const length = best.length;
-    kept = pairs.filter(
-      ({ label, sample }) =>
-        Math.abs(sample.x0 - x0) <= 6 &&
-        Math.abs(sample.x1 - sample.x0 - length) <= Math.max(4, length * 0.1) &&
-        label.y1 >= top - 60 &&
-        label.y0 <= bottom + 60,
-    );
+    const inside = new Set<(typeof pairs)[number]>();
+    for (let grew = true; grew; ) {
+      grew = false;
+      for (const pair of candidates) {
+        if (inside.has(pair)) continue;
+        if (pair.label.y1 >= top - 60 && pair.label.y0 <= bottom + 60) {
+          inside.add(pair);
+          top = Math.min(top, pair.label.y0);
+          bottom = Math.max(bottom, pair.label.y1);
+          grew = true;
+        }
+      }
+    }
+    kept = candidates.filter((pair) => inside.has(pair));
   }
   const seen = new Set<string>();
   const entries: LegendEntry[] = [];

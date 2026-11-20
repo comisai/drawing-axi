@@ -252,6 +252,46 @@ export function oddDrawing(): Buffer {
     .pen(COLORS.rain, 1.5)
     .line(100, 450, 100 + 3 * TRUE_M, 450)
     .end();
+  // A line dashed wider than the default gap: 40 points on, 27 off (9.5 mm),
+  // over 8 m.
+  c.layer('WIDE').pen(COLORS.water, 0.6);
+  for (let x = 100; x < 100 + 8 * TRUE_M; x += 67)
+    c.line(x, 500, Math.min(100 + 8 * TRUE_M, x + 40), 500);
+  c.end();
+  // A pipe of 6 m dashed 30 on, 6 off, and its linetype letters plotted as
+  // strokes: a bar of 3 points every 15, two points beside the pipe.
+  c.layer('SPR').pen(COLORS.fire, 0.6);
+  for (let x = 100; x < 100 + 6 * TRUE_M; x += 36)
+    c.line(x, 550, Math.min(100 + 6 * TRUE_M, x + 30), 550);
+  for (let x = 100; x < 100 + 6 * TRUE_M - 3; x += 15)
+    c.line(x, 548, x + 3, 548);
+  c.end();
+  // A sewer line of 8 m whose size label sits 2.5 mm above it, as an office
+  // writes them over a slope arrow: past the default reach of 1.5 mm.
+  c.layer('SEW')
+    .pen(COLORS.sewer, 0.6)
+    .line(520, 200, 520 + 8 * TRUE_M, 200)
+    .end();
+  comments.push({ text: '%%C160-1%', x0: 600, y0: 180.9, x1: 650, y1: 192.9 });
+  // A grey-water line whose size is written alone beside it, as one office
+  // writes them; and a riser tag R2 whose size label lies beside another line.
+  c.layer('GREY')
+    .pen(COLORS.sewer, 0.6)
+    .line(100, 150, 100 + 5 * TRUE_M, 150)
+    .end();
+  comments.push({ text: '%%C63', x0: 140, y0: 136, x1: 160, y1: 147 });
+  // A fixture's label with its sizes in it, beside the same line further on.
+  comments.push({ text: 'FD4"/2"', x0: 200, y0: 136, x1: 230, y1: 147 });
+  // A water line named by its code, with its size written alone beside it.
+  c.layer('CWL')
+    .pen(COLORS.water, 0.6)
+    .line(300, 120, 300 + 4 * TRUE_M, 120)
+    .end();
+  comments.push({ text: '%%C32', x0: 330, y0: 106, x1: 350, y1: 117 });
+  comments.push({ text: 'CW1-%%C32', x0: 380, y0: 60, x1: 420, y1: 72 });
+  c.layer('TAGLINE').pen(COLORS.rain, 0.6).line(650, 224, 760, 224).end();
+  comments.push({ text: 'R2', x0: 689, y0: 194, x1: 711, y1: 206 });
+  comments.push({ text: '%%C110', x0: 690, y0: 208, x1: 710, y1: 220 });
   // A coded size label that sits apart from its line, as one on a leader does.
   comments.push({ text: 'HF-%%C4"', x0: 275, y0: 234, x1: 325, y1: 246 });
   // A tag: a stroke-font identifier with its size in font text under it.

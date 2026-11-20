@@ -44,6 +44,10 @@ drawing-axi measure plan.pdf \
 - `sized_by` shows which label sized what. Check it: a label of another system there is a wrong pairing.
 - `labels_apart` lists coded labels that sit on no run. The sheet names that size for the system without saying which pipe: report it as the sheet's stated size, to confirm, and leave the rows unsized.
 - A layer whose name holds a `+` works as it is written: `--group x=A+B`.
+- `gaps` names a group whose dashes are farther apart than `--gap`; check with `runs`, then pass `--group-gap NAME=MM` for that group only. Lowering `--gap` for the whole sheet breaks other lines.
+- `size_labels` says when a wider `--reach` would place more labels; try it, then check `sized_by`.
+- If `labels --sizes` shows many sizes with no code and no slope, and the sheet writes sizes beside its pipes, `--plain` uses those that no riser tag claims. Check `sized_by`.
+- The saved file lists every label that found no run (`unplaced`) with its place, and the layers of each group.
 - `unsized` rows are pipe with no label along it. Size them from riser tags or the legend, with the owner. Never guess.
 
 ## Where is that run?

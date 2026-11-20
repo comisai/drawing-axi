@@ -171,7 +171,9 @@ export function decodeLabels(labels: Label[]): void {
     const s = cleaned[i] as string;
     if (l.source !== 'shx' || (s.match(/[a-z]/g)?.length ?? 0) < 4) return;
     samples++;
-    if (plausibleHebrew(keyed(s))) plausible++;
+    // A Latin code in brackets after the words does not count against them.
+    const words = s.trim().replace(/\s*\)[A-Za-z]{1,3}\(\s*$/, '');
+    if (plausibleHebrew(keyed(words))) plausible++;
   });
   const hebrewKeys = samples >= 3 && plausible / samples >= 0.6;
   labels.forEach((l, i) => {
@@ -186,12 +188,21 @@ export function decodeLabels(labels: Label[]): void {
       return;
     }
     if (hebrewKeys && /[a-z]/.test(s)) {
-      const mapped = keyed(s);
-      if (plausibleHebrew(mapped)) {
-        l.text = orderRuns([...mapped])
+      const hebrew = (text: string) =>
+        orderRuns([...keyed(text)])
           .join('')
           .replace(/(?<=[\u05d0-\u05ea])''(?=[\u05d0-\u05ea])/g, '"')
           .trim();
+      if (plausibleHebrew(keyed(s))) {
+        l.text = hebrew(s);
+        return;
+      }
+      // A system code in brackets after the words, such as (O) or (OD),
+      // was typed in Latin letters and is stored back to front.
+      const coded = /^(.*\S)\s*\)([A-Za-z]{1,3})\(\s*$/.exec(s.trim());
+      if (coded && plausibleHebrew(keyed(coded[1] as string))) {
+        const code = [...(coded[2] as string)].reverse().join('').toUpperCase();
+        l.text = `${hebrew(coded[1] as string)} (${code})`;
         return;
       }
     }

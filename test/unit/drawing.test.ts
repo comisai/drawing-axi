@@ -10,6 +10,7 @@ import { parseColor } from '../../src/drawing/model.ts';
 import {
   buildRuns,
   drawnWithin,
+  dropShadows,
   type Run,
   segmentsOf,
 } from '../../src/drawing/runs.ts';
@@ -20,6 +21,7 @@ import {
   statedRatios,
 } from '../../src/drawing/scale.ts';
 import {
+  codeOf,
   type GroupedRun,
   type SizeLabel,
   sizeLabels,
@@ -132,6 +134,38 @@ describe('scale', () => {
       label('1:100', 950, 800, 990, 810),
     ];
     assert.equal(statedRatios({ ...sheet, labels })[0], 100);
+  });
+
+  it('does not take a field of paving hatch for the scale bar', () => {
+    // A paving hatch inside the plan: rows of alternating filled cells, each
+    // band 2 m long at 102.4% of the stated scale, banded by full lines.
+    const cell = (nominalPtPerM(100) * 2 * 1.024) / 10;
+    const strokes = [...sheet.strokes];
+    const fills = [...sheet.fills];
+    for (let row = 0; row <= 4; row++)
+      strokes.push(
+        stroke([100, 600 + row * 4, 100 + cell * 10, 600 + row * 4]),
+      );
+    for (let row = 0; row < 4; row++)
+      for (let i = 0; i < 10; i++)
+        if ((i + row) % 2 === 0)
+          fills.push({
+            layer: -1,
+            color: 0,
+            x0: 100 + i * cell,
+            y0: 600 + row * 4,
+            x1: 100 + (i + 1) * cell,
+            y1: 604 + row * 4,
+            area: cell * 4,
+          });
+    // Put the field first, so a tie would take it.
+    const scale = sheetScale({
+      ...sheet,
+      strokes: strokes.reverse(),
+      fills: fills.reverse(),
+    });
+    assert.equal(scale.bar?.metres, 10);
+    assert.ok(Math.abs(scale.ptPerM / nominalPtPerM(100) - 0.98) < 1e-6);
   });
 
   it('does not take a ruled table for a scale bar', () => {
@@ -318,6 +352,41 @@ describe('runs', () => {
     assert.ok(logo > 0.005 && logo < 0.015, String(logo));
   });
 
+  it('drops a row of linetype letters that rides along a pipe, and keeps real lines', () => {
+    // A pipe dashed 30 on, 6 off; a row of letter bars 2 points above it,
+    // 3 long every 15; a solid pipe 4 points below; and a second dashed pipe
+    // 3 points further down.
+    const dashes = (y: number, on: number, off: number, to: number) => {
+      const out = [];
+      for (let x = 0; x < to; x += on + off)
+        out.push(stroke([x, y, Math.min(to, x + on), y]));
+      return out;
+    };
+    const pipe = dashes(100, 30, 6, 360);
+    const letters = dashes(98, 3, 12, 360);
+    const solid = [stroke([0, 104, 360, 104])];
+    const second = dashes(107, 30, 6, 360);
+    const built = buildRuns(
+      segmentsOf([...pipe, ...letters, ...solid, ...second]),
+      { gap: 14 },
+    );
+    assert.equal(built.length, 4);
+    const { kept, dropped } = dropShadows(built);
+    assert.equal(dropped, 1);
+    assert.deepEqual(
+      kept
+        .map((r: Run) => Math.round(r.y0))
+        .sort((a: number, b: number) => a - b),
+      [100, 104, 107],
+    );
+    // A short run beside a long one is kept when it is drawn as fully.
+    const tee = buildRuns(
+      segmentsOf([stroke([0, 100, 360, 100]), stroke([100, 102, 160, 102])]),
+      { gap: 8 },
+    );
+    assert.equal(dropShadows(tee).dropped, 0);
+  });
+
   it('knows where a run carries ink', () => {
     const [only] = buildRuns(
       segmentsOf([stroke([0, 0, 40, 0]), stroke([60, 0, 100, 0])]),
@@ -462,8 +531,10 @@ describe('sizes', () => {
     assert.deepEqual(sized(['F', 'CW'], beside('F-Ø4"', 100)), ['4"', null]);
     // Another code is another system, even with no group of its own.
     assert.deepEqual(sized(['F', 'CW'], beside('H.F.-Ø4"', 100)), [null, null]);
-    // A label with a slope and no code goes to whichever run it is beside.
-    assert.deepEqual(sized(['F', 'CW'], beside('Ø160-1%', 300)), [
+    // A group named by a code takes only labels of that code: a slope label
+    // with no code is a gravity pipe's, not a water line's.
+    assert.deepEqual(sized(['F', 'CW'], beside('Ø160-1%', 300)), [null, null]);
+    assert.deepEqual(sized(['F', null], beside('Ø160-1%', 300)), [
       null,
       'Ø160',
     ]);
@@ -518,6 +589,19 @@ describe('sizes', () => {
       placed.missed.map((l) => l.text),
       ['F-Ø3"'],
     );
+  });
+
+  it('reads a system code as the letters before the first digit', () => {
+    assert.equal(codeOf('OD7A-'), 'OD');
+    assert.equal(codeOf('OD10A-'), 'OD');
+    assert.equal(codeOf('C.W.2-'), 'CW');
+    assert.equal(codeOf('H.F.-'), 'HF');
+    assert.equal(codeOf('CW1-'), 'CW');
+    assert.equal(codeOf('F-'), 'F');
+    assert.equal(codeOf('SPRK'), 'SPRK');
+    assert.equal(codeOf('2-'), null);
+    const labels = sizeLabels([label('OD7A-Ø3"', 0, 0, 40, 12)]);
+    assert.equal(labels[0]?.code, 'OD');
   });
 
   it('remembers which label sized a run', () => {
@@ -585,6 +669,45 @@ describe('tags, symbols and the legend', () => {
     );
     assert.equal(groups.length, 1);
     assert.equal(groups[0]?.parts, 2);
+  });
+
+  it('reads a legend whose samples differ by a point, whose rows run on, and whose one sample is indented', () => {
+    // Laid out as a real legend: an indented vent row on top; seven rows whose
+    // samples start at 3798 and are 69 points long; two at 3795 and 70 long,
+    // as a plotter rounds them; a row with no sample; and two more rows.
+    const rows: Array<[number, number | null, number]> = [
+      [702, 3873, 69],
+      ...[726, 748, 772, 795, 820, 845, 875].map(
+        (y) => [y, 3798, 69] as [number, number, number],
+      ),
+      [907, 3795, 70],
+      [935, 3795, 70],
+      [962, null, 0],
+      [994, 3795, 70],
+      [1025, 3795, 70],
+    ];
+    const strokes: Stroke[] = [];
+    const labels: Label[] = [];
+    rows.forEach(([y, x0, length], row) => {
+      if (x0 !== null)
+        strokes.push({
+          ...stroke([x0, y + 2, x0 + length, y + 2]),
+          layer: row,
+          color: row,
+        });
+      labels.push(label(`system number ${row}`, 3990, y - 7, 4105, y + 7));
+    });
+    const entries = readLegend(strokes, labels, {
+      gap: 8 * MM,
+      minSample: 4 * MM,
+      maxSample: 60 * MM,
+      reach: 110 * MM,
+      aligned: true,
+    });
+    assert.deepEqual(
+      entries.map((e) => e.layer),
+      [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12],
+    );
   });
 
   it('pairs legend captions with the layer and colour of their samples', () => {

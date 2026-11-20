@@ -36,6 +36,12 @@ const GAP: FlagSpec = {
   value: '<mm>',
   summary: 'Join pieces up to this far apart on paper, default 8',
 };
+const GROUP_GAP: FlagSpec = {
+  type: 'string',
+  multiple: true,
+  value: '<name>=<mm>',
+  summary: 'A gap for one group, when its dashes are farther apart',
+};
 const MIN: FlagSpec = {
   type: 'string',
   value: '<mm>',
@@ -177,6 +183,7 @@ export const COMMANDS: readonly CommandSpec[] = [
       layer: LAYER,
       group: GROUP,
       gap: GAP,
+      'group-gap': GROUP_GAP,
       min: MIN,
       ...AREA_FLAGS,
       ...SCALE_FLAGS,
@@ -196,6 +203,7 @@ export const COMMANDS: readonly CommandSpec[] = [
       group: GROUP,
       layer: LAYER,
       gap: GAP,
+      'group-gap': GROUP_GAP,
       min: MIN,
       reach: {
         type: 'string',
@@ -206,7 +214,7 @@ export const COMMANDS: readonly CommandSpec[] = [
       plain: {
         type: 'boolean',
         summary:
-          'Also use sizes written alone, without a slope or system prefix',
+          'Also use sizes written alone, without a slope or system prefix, that no riser tag claims',
       },
       ...AREA_FLAGS,
       ...SCALE_FLAGS,

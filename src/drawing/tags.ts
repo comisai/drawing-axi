@@ -12,6 +12,8 @@ export interface Tag {
   size: string;
   x: number;
   y: number;
+  /** The label that gave the size. */
+  sizeLabel: Label;
 }
 
 const ID =
@@ -74,6 +76,7 @@ export function findTags(labels: readonly Label[]): Tag[] {
       size,
       x: (best.x0 + best.x1) / 2,
       y: (best.y0 + best.y1) / 2,
+      sizeLabel: label,
     });
   }
   return tags;
