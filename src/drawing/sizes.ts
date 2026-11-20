@@ -160,13 +160,15 @@ export function sizeRuns(
           if (tried.has(index)) continue;
           tried.add(index);
           const groupCode = codes[(out[index] as SizedRun).group] ?? null;
-          if (label.code !== null) {
-            // A coded label belongs to the group of that code, when there is
-            // one, and never to a group of another code.
+          const score = fit(label, cx, cy, out[index] as SizedRun, options);
+          // A label written in a break of a line is that line's, whatever
+          // the groups are called. Beside a line, a coded label belongs to
+          // the group of that code, when there is one, and never to a group
+          // of another code.
+          if (score >= 1 && label.code !== null) {
             if (bound.has(label.code) && groupCode !== label.code) continue;
             if (groupCode !== null && groupCode !== label.code) continue;
           }
-          const score = fit(label, cx, cy, out[index] as SizedRun, options);
           if (score < bestScore) {
             best = index;
             bestScore = score;

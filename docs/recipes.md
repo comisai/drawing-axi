@@ -40,7 +40,7 @@ drawing-axi measure plan.pdf \
 - Put every system in one command, so a label goes to its own pipe and not to a neighbour's.
 - Exclude the legend, and a title block or detail that holds lines on the pipe layers. `legend` prints its own `box`; read other boxes off a picture with `render --grid`.
 - `size_labels` says how many size labels found a run. Labels that found none belong to pipe you did not measure, or sit too far from any run.
-- When labels carry a system code (`F-Ø4"`, `CW1-Ø3"`: see `drawing-axi labels plan.pdf --sizes`), name each group by its code: `--group F=FIRE --group CW=WATER`. A coded label then sizes only the group of that code.
+- When labels carry a system code (`F-Ø4"`, `CW1-Ø3"`: see `drawing-axi labels plan.pdf --sizes`), name each group by its code: `--group F=FIRE --group CW=WATER`. A coded label beside a line then sizes only the group of that code. A label written in a break of a line sizes that line whatever its group is called.
 - `sized_by` shows which label sized what. Check it: a label of another system there is a wrong pairing.
 - `labels_apart` lists coded labels that sit on no run. The sheet names that size for the system without saying which pipe: report it as the sheet's stated size, to confirm, and leave the rows unsized.
 - A layer whose name holds a `+` works as it is written: `--group x=A+B`.

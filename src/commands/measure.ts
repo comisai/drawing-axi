@@ -314,7 +314,8 @@ export function measure(input: CommandInput): string {
   for (const label of placed.missed) {
     const group = label.code === null ? -1 : codes.indexOf(label.code);
     if (group < 0) continue;
-    const key = `${group}|${label.size}`;
+    // One row for each way the label is written: CW1 and C.W.2 are two rows.
+    const key = `${group}|${label.size}|${label.text}`;
     const e = apart.get(key);
     if (e) e.labels++;
     else

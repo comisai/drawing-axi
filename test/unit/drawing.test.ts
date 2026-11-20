@@ -449,6 +449,39 @@ describe('sizes', () => {
     ]);
   });
 
+  it('gives a label written in a break of a line to that line, whatever the groups are called', () => {
+    // The legend's water line is group W, and has no label. The label W-3"
+    // sits in a break of another line, which the caller named otherwise.
+    const legendLine = run(0, 100, 300, 100, 0);
+    const broken: GroupedRun = {
+      ...run(0, 300, 300, 300, 1),
+      // Ink on both sides of the label, none under it.
+      drawn: [0, 100, 150, 300],
+    };
+    const inline = label('W-3"', 102, 294, 148, 306);
+    const sized = sizeRuns([legendLine, broken], sizeLabels([inline]), {
+      reach: 4,
+      codes: ['W', null],
+    });
+    assert.deepEqual(
+      sized.map((r) => [r.size, r.label]),
+      [
+        [null, null],
+        ['3"', 'W-3"'],
+      ],
+    );
+    // Beside the other line, and not in a break of it, the code still decides.
+    const beside = label('W-3"', 102, 288, 148, 301);
+    const whole = run(0, 300, 300, 300, 1);
+    assert.deepEqual(
+      sizeRuns([legendLine, whole], sizeLabels([beside]), {
+        reach: 4,
+        codes: ['W', null],
+      }).map((r) => r.size),
+      [null, null],
+    );
+  });
+
   it('lists the labels that found no run', () => {
     const placed = { count: 0, missed: [] as SizeLabel[] };
     sizeRuns(
