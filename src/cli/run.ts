@@ -87,7 +87,7 @@ export const COMMANDS: readonly CommandSpec[] = [
   {
     name: 'scale',
     args: FILE,
-    flags: { page: PAGE_FLAG, ...SCALE_FLAGS },
+    flags: { page: PAGE_FLAG, ...SCALE_FLAGS, save: SAVE_FLAG },
     summary: "The sheet's scale and how it was found",
     run: scale,
   },
@@ -111,6 +111,7 @@ export const COMMANDS: readonly CommandSpec[] = [
       page: PAGE_FLAG,
       limit: LIMIT_FLAG,
       full: FULL_FLAG,
+      save: SAVE_FLAG,
     },
     summary: 'Layers with the length of straight runs drawn on each',
     run: layers,

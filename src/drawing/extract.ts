@@ -11,6 +11,7 @@ import {
   Name,
   type Obj,
   PdfString,
+  PdfSyntaxError,
   Ref,
   Stream,
 } from '../pdf/objects.ts';
@@ -23,6 +24,8 @@ type Matrix = [number, number, number, number, number, number];
 const MAX_COORDS = 12_000_000;
 const MAX_LABELS = 200_000;
 const MAX_FORM_DEPTH = 12;
+/** The longest side a sheet may have, in points: 200 inches at a unit of 20. */
+const MAX_SHEET = 288_000;
 const CURVE_STEPS = 8;
 
 export class DrawingTooLarge extends Error {
@@ -163,6 +166,31 @@ export function readSheet(
   if (options.deadline !== undefined && now() > options.deadline)
     throw new DeadlinePassed();
   const { matrix: base, width, height } = baseMatrix(page);
+  // A page is at most 200 inches a side times its unit; far more than that is
+  // a damaged box, and would make every later step walk an absurd area.
+  if (
+    !(width > 0 && height > 0) ||
+    !Number.isFinite(width + height) ||
+    Math.max(width, height) > MAX_SHEET
+  )
+    throw new PdfSyntaxError('the page size is not usable');
+  // Content far off the sheet is noise from a damaged file. Keep a margin of
+  // one sheet on every side, and count what falls outside.
+  const reach = Math.max(width, height);
+  const within = (x: number, y: number): boolean =>
+    x >= -reach && x <= width + reach && y >= -reach && y <= height + reach;
+  let outside = 0;
+  /** A label lies on or near the sheet and is no larger than it. */
+  const labelFits = (box: {
+    x0: number;
+    y0: number;
+    x1: number;
+    y1: number;
+  }): boolean =>
+    within(box.x0, box.y0) &&
+    within(box.x1, box.y1) &&
+    box.x1 - box.x0 <= width &&
+    box.y1 - box.y0 <= height;
   const { layers, byObject } = readLayers(doc);
   const strokes: Stroke[] = [];
   const fills: Fill[] = [];
@@ -239,8 +267,11 @@ export function readSheet(
       em: number;
     } | null = null;
     const flushText = () => {
-      if (pending?.label.raw.trim() && texts.length < MAX_LABELS)
-        texts.push(pending.label);
+      const made = pending?.label;
+      if (made?.raw.trim() && texts.length < MAX_LABELS) {
+        if (labelFits(made)) texts.push(made);
+        else outside++;
+      }
       pending = null;
     };
 
@@ -310,6 +341,13 @@ export function readSheet(
       );
       for (const pts of subpaths) {
         if (pts.length < 4) continue;
+        let sane = true;
+        for (let i = 0; i < pts.length && sane; i += 2)
+          sane = within(pts[i] as number, pts[i + 1] as number);
+        if (!sane) {
+          outside++;
+          continue;
+        }
         coords += pts.length;
         if (coords > MAX_COORDS) throw new DrawingTooLarge();
         if (stroke)
@@ -768,6 +806,10 @@ export function readSheet(
     const x1 = Math.max(p[0], p[2]);
     const y0 = Math.min(p[1], p[3]);
     const y1 = Math.max(p[1], p[3]);
+    if (!labelFits({ x0, y0, x1, y1 })) {
+      outside++;
+      continue;
+    }
     const author = doc.text(annot.get('T')) ?? '';
     comments.push({
       text: '',
@@ -794,6 +836,8 @@ export function readSheet(
     fills,
     labels: [...comments, ...texts],
     images,
-    skipped: [...skipped],
+    skipped: outside
+      ? [...skipped, `${outside} items far outside the sheet`]
+      : [...skipped],
   };
 }

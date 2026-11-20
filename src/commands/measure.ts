@@ -45,7 +45,8 @@ interface Group {
   picks: LayerPick[];
 }
 
-const GROUP_NAME = /^[\p{L}\p{N}][\p{L}\p{N} _.-]{0,39}$/u;
+/** A group's name is the caller's own words: anything printable, up to 60 characters. */
+const GROUP_NAME = /^[^=\p{Cc}\p{Cf}]{1,60}$/u;
 
 /** `--group name=LAYER[@colour][+LAYER...]` and `--layer LAYER[@colour]`. */
 function groupsOf(input: CommandInput, sheet: Sheet): Group[] {
@@ -58,9 +59,13 @@ function groupsOf(input: CommandInput, sheet: Sheet): Group[] {
   for (const spec of list(input.values, 'group')) {
     const eq = spec.indexOf('=');
     const name = eq > 0 ? spec.slice(0, eq).trim() : '';
-    if (!GROUP_NAME.test(name) || eq === spec.length - 1)
+    if (eq <= 0 || eq === spec.length - 1)
       throw usage(
-        '--group takes <name>=<layer>, with more layers joined by +, such as --group sewer=SEWER+SEWER-VENT. A layer may name one colour: LAYER@#ff00ff.',
+        '--group takes <name>=<layer>, with more layers joined by +, such as --group sewer=SEWER+VENT. A layer may name one colour: LAYER@#ff00ff.',
+      );
+    if (!GROUP_NAME.test(name))
+      throw usage(
+        'A group name is 1 to 60 characters, without = or control characters. Use a short name such as sewer.',
       );
     add(
       name,
@@ -114,8 +119,18 @@ function runsOf(sheet: Sheet, groups: Group[], settings: Settings): NamedRun[] {
   return out;
 }
 
+/** Which part of the sheet was read, in words. */
+function areaText(area: Area): string {
+  if (wholeSheet(area)) return 'whole sheet';
+  const boxes = `${area.exclude.length} excluded box${area.exclude.length === 1 ? '' : 'es'}`;
+  if (!area.region) return `whole sheet outside ${boxes}`;
+  return area.exclude.length
+    ? `inside the region, outside ${boxes}`
+    : 'inside the region only';
+}
+
 const settingsLine = (s: Settings, extra = ''): string =>
-  `pieces up to ${s.gapMm} mm apart on paper are joined; runs under ${s.minMm} mm on paper are left out${extra}${wholeSheet(s.area) ? '; whole sheet' : '; inside the given area only'}`;
+  `pieces up to ${s.gapMm} mm apart on paper are joined; runs under ${s.minMm} mm on paper are left out${extra}; ${areaText(s.area)}`;
 
 const point = (x: number, y: number): string =>
   `${Math.round(x)},${Math.round(y)}`;
@@ -162,7 +177,7 @@ export function runs(input: CommandInput): string {
       'drawing-axi runs <file.pdf> --layer <layer> --region <x0,y0,x1,y1>',
     help: rows.length
       ? [
-          'Run `drawing-axi measure <file.pdf> --group <name>=<layer>` for the same runs by pipe size',
+          'Run `drawing-axi measure <file.pdf> --group <name>=<layer> --group <name>=<layer>` for runs by pipe size, every system in one command',
           'Run `drawing-axi render <file.pdf> --layer <layer> --region <x0,y0,x1,y1> --out <file.svg>` to see a run',
         ]
       : [
@@ -186,7 +201,13 @@ export function measure(input: CommandInput): string {
       inArea(settings.area, (l.x0 + l.x1) / 2, (l.y0 + l.y1) / 2),
     ),
   ).filter((l) => plain || l.onRun);
-  const sized = sizeRuns(found, labels, { reach: paperMm(reachMm) });
+  const placed = { count: 0 };
+  const sized = sizeRuns(found, labels, { reach: paperMm(reachMm) }, placed);
+  const labelsLine = `${placed.count} of ${labels.length} size labels in the area sit on a measured run${labels.length > placed.count ? '; the others belong to pipe that is not in these groups, or fit no run' : ''}`;
+  const settingsText = settingsLine(
+    settings,
+    `; a size label counts within ${reachMm} mm of its run${plain ? ', plain sizes included' : ''}`,
+  );
   const m = (pt: number) => pt / scale.ptPerM;
 
   const groupRows: Row[] = groups.map((group, index) => {
@@ -245,7 +266,14 @@ export function measure(input: CommandInput): string {
   const saved = save(input.io, str(input.values, 'save'), {
     file: name,
     page: sheet.page,
-    scale: { ratio: scale.ratio, pt_per_m: scale.ptPerM, basis: scale.basis },
+    scale: {
+      ratio: scale.ratio,
+      pt_per_m: scale.ptPerM,
+      basis: scale.basis,
+      text: scaleLine(scale),
+    },
+    size_labels: labelsLine,
+    settings_text: settingsText,
     settings: {
       gap_mm: settings.gapMm,
       min_mm: settings.minMm,
@@ -275,7 +303,7 @@ export function measure(input: CommandInput): string {
             ]
           : []),
         'Run `drawing-axi runs <file.pdf> --group <name>=<layer>` for each run and where it is',
-        'Run `drawing-axi measure <file.pdf> --group <name>=<layer> --exclude <x0,y0,x1,y1>` to leave the legend and title block out',
+        'Run `drawing-axi legend <file.pdf>` for the box to pass as --exclude, so legend samples are not measured',
       ]
     : [
         'Run `drawing-axi layers <file.pdf>` for the layers that hold long runs',
@@ -293,10 +321,8 @@ export function measure(input: CommandInput): string {
           summary: `${plural(groups.length, 'group')}, ${round(m(total), 1)} m in ${plural(sized.length, 'run')}${dropped ? `; the last ${dropped} size rows left out to fit, use --limit or --save` : ''}`,
           file: name,
           scale: scaleLine(scale),
-          settings: settingsLine(
-            settings,
-            `; a size label counts within ${reachMm} mm of its run${plain ? ', plain sizes included' : ''}`,
-          ),
+          settings: settingsText,
+          size_labels: labelsLine,
           ...(saved ? { saved } : {}),
           groups: groupRows.map((r) =>
             tableRow(

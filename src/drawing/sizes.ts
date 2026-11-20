@@ -91,6 +91,8 @@ export function sizeRuns(
   runs: readonly GroupedRun[],
   labels: readonly SizeLabel[],
   options: SizeOptions,
+  /** Set to how many labels found a run to size. */
+  placed?: { count: number },
 ): SizedRun[] {
   const out: SizedRun[] = runs.map((r) => ({
     ...r,
@@ -140,6 +142,7 @@ export function sizeRuns(
       }
     }
     if (best < 0) continue;
+    if (placed) placed.count++;
     const tally = votes[best] as Map<string, Vote>;
     const entry = tally.get(label.size);
     if (entry) {

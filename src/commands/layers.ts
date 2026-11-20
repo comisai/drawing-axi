@@ -9,11 +9,13 @@ import { countLine, listOutput, type Row } from '../output/views.ts';
 import {
   areaOf,
   clipStrokes,
+  NO_LAYER,
   openSheet,
   paperMm,
   positiveInt,
   positiveNumber,
   round,
+  save,
   scaleOf,
   str,
 } from './common.ts';
@@ -54,7 +56,7 @@ export function layers(input: CommandInput): string {
   }
   const rows: Row[] = [];
   for (const bucket of buckets.values()) {
-    const layerName = sheet.layers[bucket.layer]?.name ?? '(no layer)';
+    const layerName = sheet.layers[bucket.layer]?.name ?? NO_LAYER;
     if (match && !layerName.toLowerCase().includes(match)) continue;
     let runLength = 0;
     for (const run of buildRuns(segmentsOf(bucket.strokes), { gap }))
@@ -91,6 +93,11 @@ export function layers(input: CommandInput): string {
       (b._sort as number) - (a._sort as number) ||
       String(a.layer).localeCompare(String(b.layer)),
   );
+  const saved = save(input.io, str(input.values, 'save'), {
+    file: name,
+    scale: scaleText,
+    layers: rows.map(({ _sort, ...row }) => row),
+  });
   const shown = input.values.full === true ? rows : rows.slice(0, limit);
   const what = split ? 'layer and colour' : 'layer';
   const whats = split ? 'layers and colours' : 'layers';
@@ -101,7 +108,7 @@ export function layers(input: CommandInput): string {
       : match
         ? `0 layers match; the sheet has ${sheet.layers.length}`
         : '0 layers with ink',
-    head: { file: name, scale: scaleText },
+    head: { file: name, scale: scaleText, saved },
     rows: shown,
     columns: ['layer', 'run_m', 'strokes', 'color'],
     full: input.values.full === true,
@@ -109,7 +116,7 @@ export function layers(input: CommandInput): string {
     help: rows.length
       ? [
           'Run `drawing-axi layers <file.pdf> --split --match <layer>` when one layer shows more than one colour',
-          'Run `drawing-axi measure <file.pdf> --group <name>=<layer>` to measure a layer by pipe size',
+          'Run `drawing-axi measure <file.pdf> --group <name>=<layer> --group <name>=<layer>` to measure by pipe size, every system in one command',
           'Run `drawing-axi render <file.pdf> --layer <layer> --out <file.svg>` to see what a layer draws',
         ]
       : ['Run `drawing-axi layers <file.pdf>` without --match for every layer'],

@@ -89,7 +89,10 @@ describe('info and scale', () => {
       doc.scale,
       '1:100, 27.78 pt per m (stated ratio, refined by the scale bar)',
     );
-    assert.equal(doc.layers, `${EXPECT.layers} (1 switched off)`);
+    assert.equal(
+      doc.layers,
+      `${EXPECT.layers} with ink on this page, ${EXPECT.layers} in the file (1 switched off)`,
+    );
     assert.equal(doc.labels, '24 stroke-font, 1 font text, 1 notes');
     assert.equal(doc.size_labels, '9 (4 written along runs)');
     assert.equal(doc.notes, undefined);
@@ -518,5 +521,169 @@ describe('errors', () => {
     );
     const whole = await ok('labels', 'plan.pdf', '--source', 'note', '--full');
     assert.equal(rowsOf(whole, 'labels')[0]?.text, REVIEW_NOTE);
+  });
+});
+
+describe('what a worker found hard', () => {
+  it('says which layers have ink on the page, and how to read another page', async () => {
+    const r = await run('info', 'plan.pdf', '--page', '2');
+    const doc = body(r.stdout);
+    assert.equal(
+      doc.layers,
+      '0 with ink on this page, 9 in the file (1 switched off)',
+    );
+    assert.match(
+      String((doc.notes as string[])[0]),
+      /^No line on this page is on a layer/,
+    );
+    const first = await run('info', 'plan.pdf');
+    assert.match(
+      first.stdout,
+      /drawing-axi info <file\.pdf> --page <n>` for another of the 2 pages/,
+    );
+  });
+
+  it('measures ink that is on no layer by the name it is listed under', async () => {
+    const layers = await ok('layers', 'plan.pdf', '--page', '2');
+    assert.equal(rowsOf(layers, 'layers')[0]?.layer, '(no layer)');
+    const doc = await ok(
+      'runs',
+      'plan.pdf',
+      '--page',
+      '2',
+      '--layer',
+      '(no layer)',
+    );
+    assert.deepEqual(
+      rowsOf(doc, 'runs').map((r) => r.length_m),
+      [3.53],
+    );
+  });
+
+  it("takes a group name in the legend's own words", async () => {
+    const doc = await ok(
+      'measure',
+      'plan.pdf',
+      '--group',
+      'צנרת מים כבוי אש (F)=FIRE',
+      '--group',
+      'rain water=RAIN',
+      '--region',
+      PLAN,
+    );
+    assert.deepEqual(
+      rowsOf(doc, 'groups').map((g) => [g.group, g.length_m]),
+      [
+        ['צנרת מים כבוי אש (F)', 15],
+        ['rain water', 12],
+      ],
+    );
+    const noName = await fails(
+      'usage',
+      2,
+      'measure',
+      'plan.pdf',
+      '--group',
+      '=FIRE',
+    );
+    assert.match(String(noName.message), /--group takes <name>=<layer>/);
+    const long = await fails(
+      'usage',
+      2,
+      'measure',
+      'plan.pdf',
+      '--group',
+      `${'x'.repeat(61)}=FIRE`,
+    );
+    assert.match(String(long.message), /A group name is 1 to 60 characters/);
+  });
+
+  it('says how many size labels found a run, and what area was read', async () => {
+    const all = await ok('measure', 'plan.pdf', ...GROUPS);
+    assert.equal(
+      all.size_labels,
+      '4 of 4 size labels in the area sit on a measured run',
+    );
+    assert.match(String(all.settings), /; inside the region only$/);
+    // Alone, the fire line still takes nothing from the rain label it crosses.
+    const fire = await ok(
+      'measure',
+      'plan.pdf',
+      '--layer',
+      'FIRE',
+      '--exclude',
+      '1000,0,1400,900',
+    );
+    assert.equal(
+      fire.size_labels,
+      '0 of 4 size labels in the area sit on a measured run; the others belong to pipe that is not in these groups, or fit no run',
+    );
+    assert.match(
+      String(fire.settings),
+      /; whole sheet outside 1 excluded box$/,
+    );
+    assert.equal(rowsOf(fire, 'sizes')[0]?.size, 'unsized');
+  });
+
+  it("gives the legend's box, which leaves its samples out of a takeoff", async () => {
+    const legend = await ok('legend', 'plan.pdf');
+    assert.equal(legend.box, '1050,93,1360,202');
+    const doc = await ok(
+      'measure',
+      'plan.pdf',
+      '--layer',
+      'SEWER',
+      '--exclude',
+      String(legend.box),
+    );
+    assert.equal(rowsOf(doc, 'groups')[0]?.length_m, 43);
+  });
+
+  it('saves the lines a workbook quotes, so nothing is retyped', async () => {
+    await ok('measure', 'plan.pdf', ...GROUPS, '--save', 'm.json');
+    const m = JSON.parse(readFileSync(join(dir, 'm.json'), 'utf8'));
+    assert.equal(
+      m.scale.text,
+      '1:100, 27.78 pt per m (stated ratio, refined by the scale bar)',
+    );
+    assert.match(
+      m.settings_text,
+      /^pieces up to 8 mm apart on paper are joined/,
+    );
+    assert.equal(
+      m.size_labels,
+      '4 of 4 size labels in the area sit on a measured run',
+    );
+    await ok('scale', 'plan.pdf', '--save', 's.json');
+    assert.equal(
+      JSON.parse(readFileSync(join(dir, 's.json'), 'utf8')).plotted_at,
+      '98% of the stated scale',
+    );
+    await ok('layers', 'plan.pdf', '--region', PLAN, '--save', 'l.json');
+    const l = JSON.parse(readFileSync(join(dir, 'l.json'), 'utf8'));
+    assert.equal(
+      l.layers.find((row: { layer: string }) => row.layer === 'SEWER').run_m,
+      43,
+    );
+    assert.equal(l.layers[0]._sort, undefined);
+  });
+
+  it('shows the stored text only where decoding changed it', async () => {
+    const doc = await ok(
+      'labels',
+      'plan.pdf',
+      '--region',
+      '200,80,700,120',
+      '--each',
+      '--full',
+    );
+    assert.deepEqual(
+      rowsOf(doc, 'labels').map((r) => [r.text, r.stored]),
+      [
+        ['פתח 200X20 ס"מ', 'p,j 02X002 x"n'],
+        ['l=15.90', null],
+        ['(HDPE)', ')EPDH('],
+      ],
+    );
   });
 });

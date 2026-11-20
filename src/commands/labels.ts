@@ -12,6 +12,7 @@ import {
   areaOf,
   clipStrokes,
   inArea,
+  NO_LAYER,
   openSheet,
   paperMm,
   positiveInt,
@@ -129,7 +130,8 @@ export function labels(input: CommandInput): string {
         x: Math.round((l.x0 + l.x1) / 2),
         y: Math.round((l.y0 + l.y1) / 2),
         source: l.source,
-        ...(full ? { raw: l.raw } : {}),
+        // The stored text, where decoding changed it.
+        ...(full ? { stored: l.raw.trim() === l.text ? null : l.raw } : {}),
       }));
     const saved = save(input.io, str(input.values, 'save'), {
       file: name,
@@ -144,7 +146,7 @@ export function labels(input: CommandInput): string {
       head: { ...head, saved },
       rows: shown,
       columns: full
-        ? ['text', 'x', 'y', 'source', 'raw']
+        ? ['text', 'x', 'y', 'source', 'stored']
         : ['text', 'x', 'y', 'source'],
       full,
       narrower: 'drawing-axi labels <file.pdf> --each --region <x0,y0,x1,y1>',
@@ -295,12 +297,22 @@ export function legend(input: CommandInput): string {
   });
   const rows: Row[] = entries.map((e) => ({
     text: e.text,
-    layer: sheet.layers[e.layer]?.name ?? '(no layer)',
+    layer: sheet.layers[e.layer]?.name ?? NO_LAYER,
     color: colorHex(e.color),
     at: `${Math.round(e.x)},${Math.round(e.y)}`,
   }));
+  // The box round the captions and their samples: what a takeoff leaves out.
+  const box = entries.length
+    ? [
+        Math.floor(Math.min(...entries.map((e) => e.x0)) - 10),
+        Math.floor(Math.min(...entries.map((e) => e.y0)) - 10),
+        Math.ceil(Math.max(...entries.map((e) => e.x1)) + 10),
+        Math.ceil(Math.max(...entries.map((e) => e.y1)) + 10),
+      ].join(',')
+    : null;
   const saved = save(input.io, str(input.values, 'save'), {
     file: name,
+    box,
     legend: rows,
   });
   const shown = full ? rows : rows.slice(0, limit);
@@ -309,14 +321,14 @@ export function legend(input: CommandInput): string {
     summary: rows.length
       ? `${countLine(shown.length, rows.length, 'legend line')} paired with the layer its sample is drawn on`
       : '0 legend lines found: no caption has a sample line beside it',
-    head: { file: name, saved },
+    head: { file: name, box, saved },
     rows: shown,
     columns: ['text', 'layer', 'color', 'at'],
     full,
     narrower: 'drawing-axi legend <file.pdf> --region <x0,y0,x1,y1>',
     help: rows.length
       ? [
-          'Run `drawing-axi measure <file.pdf> --group <name>=<layer>@<color>` with these layers, one group per system',
+          'Run `drawing-axi measure <file.pdf> --group <name>=<layer> --group <name>=<layer> --exclude <box>` with these layers, one group per system and the box left out',
           'Run `drawing-axi layers <file.pdf>` for layers the legend does not name',
         ]
       : [

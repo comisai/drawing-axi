@@ -144,7 +144,7 @@ Flags shared by the measuring commands:
 - **Runs:** `--gap mm`, `--min mm`, on paper.
 - **Output:** `--limit n`, `--full`, `--save file.json`, `--page n`.
 
-A layer is named exactly, or without regard to case when that is unambiguous. `LAYER@#rrggbb` takes one colour of it. `--save` writes the complete result as JSON for a program to read; stdout stays the bounded TOON summary.
+A layer is named exactly, or without regard to case when that is unambiguous. `LAYER@#rrggbb` takes one colour of it. Ink on no layer is listed and named as `(no layer)`. A group's name is the caller's own words. `--save` writes the complete result as JSON for a program to read; stdout stays the bounded TOON summary.
 
 ## 7. Behavior
 
@@ -167,7 +167,7 @@ Stroke-font text is decoded in this order (`src/drawing/shx.ts`):
 3. Hebrew on Latin keys (F4). Whether the sheet uses such a font at all is decided once, from its longer labels: Latin words rarely survive the mapping, because the keys i, l and o give letters that only end a word. A label is decoded only if the result reads as Hebrew. So `l=15.90` and `office@example.com` stay as they are on the same sheet.
 4. Latin text fed to a right-to-left font, when its brackets give it away.
 
-`labels --each --full` prints the stored text beside the decoded text.
+`labels --each --full` adds the stored text wherever decoding changed it.
 
 On a sheet with stroke-font labels, font text is hidden by default and counted in the header, because there it is the background plan (F6).
 
@@ -196,13 +196,13 @@ Each label gives its size to one run, the one it fits best among all groups in t
 
 A run takes the size most of its labels state. A run with none takes the size of the sized runs of its own group that it touches, when they agree; crossing is not touching. The rest is `unsized` (F12). `labelled_m` shows how much of a size was labelled directly.
 
-Measure every system in one command. Labels then go to the right system's run and not to a neighbour's.
+Measure every system in one command. Labels then go to the right system's run and not to a neighbour's. `measure` prints how many size labels found a run.
 
 ### 7.6 Tags, symbols, legend, picture
 
 - **`tags`** pairs a short identifier with a size written within about a text line above or below it (F14), and counts by series and size.
 - **`symbols`** groups strokes and fills that are within `--join` (1.5 mm on paper) of each other, leaves out pieces over `--max-piece` (30 mm), and counts groups of the same size and number of parts. It does not know what a symbol means; `render` shows one.
-- **`legend`** pairs each caption with a short horizontal line on its row (F13). Layers that hold mostly lettering are left out. Without `--region` it takes the column of samples drawn in the most different layers, which a table of notes is not.
+- **`legend`** pairs each caption with a short horizontal line on its row (F13). Layers that hold mostly lettering are left out. Without `--region` it takes the column of samples drawn in the most different layers, which a table of notes is not. It prints the box round the captions and samples, which a takeoff passes to `--exclude`.
 - **`render`** writes SVG: chosen layers in their colours, with labels and a coordinate grid if asked. Text from the file is escaped. An agent turns it into an image (`resvg` in Comis) and looks.
 
 ### 7.7 Errors and limits

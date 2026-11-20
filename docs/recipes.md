@@ -6,9 +6,10 @@ Tested combinations for common questions. Positions are points from the top-left
 
 ```sh
 drawing-axi info plan.pdf
+drawing-axi info plan.pdf --page 2
 ```
 
-Read `layers`, `labels` and `scale`, then `notes`. A scan says "This page is a picture". A sheet with no layers says to split by colour. Do not measure a sheet whose scale is "not stated" without `--scale`.
+A PDF page is one sheet; every command takes `--page`. Read `layers`, `labels` and `scale`. `notes` appears only when something is missing. A scan says "This page is a picture". A sheet with no layers says to split by colour. Do not measure a sheet whose scale is "not stated" without `--scale`.
 
 ## Which layer is which system?
 
@@ -30,13 +31,15 @@ drawing-axi legend plan.pdf --region 1040,70,1400,200
 ## How much pipe, by size?
 
 ```sh
+drawing-axi legend plan.pdf            # its box is what to leave out
 drawing-axi measure plan.pdf \
   --group sewer=SEWER --group rain=RAIN --group fire=FIRE --group water=WATER@#0000ff \
-  --exclude 1000,0,1400,900 --save takeoff.json
+  --exclude 1050,93,1360,202 --save takeoff.json
 ```
 
 - Put every system in one command, so a label goes to its own pipe and not to a neighbour's.
-- Exclude the legend and the title block: they hold sample lines on the pipe layers.
+- Exclude the legend, and a title block or detail that holds lines on the pipe layers. `legend` prints its own `box`; read other boxes off a picture with `render --grid`.
+- `size_labels` says how many size labels found a run. Labels that found none belong to pipe you did not measure, or sit too far from any run.
 - `unsized` rows are pipe with no label along it. Size them from riser tags or the legend, with the owner. Never guess.
 
 ## Where is that run?
@@ -75,7 +78,7 @@ drawing-axi labels plan.pdf --region 200,80,700,120 --each --full
 drawing-axi labels plan.pdf --sizes
 ```
 
-`--full` adds the text as the file stores it, beside the decoded text.
+`--full` adds the text as the file stores it, wherever decoding changed it.
 
 ## The scale looks wrong
 
@@ -96,3 +99,12 @@ qpdf --stream-data=uncompress in.pdf out.pdf      # unsupported filter
 ```
 
 Then read `out.pdf`.
+
+## Lines on no layer
+
+```sh
+drawing-axi layers plan.pdf --page 2
+drawing-axi runs plan.pdf --page 2 --layer '(no layer)'
+```
+
+Ink that is on no layer is listed as `(no layer)`, and can be measured by that name.

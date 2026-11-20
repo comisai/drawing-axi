@@ -7,7 +7,7 @@ import { nominalPtPerM, type Scale } from '../drawing/scale.ts';
 import { sizeLabels } from '../drawing/sizes.ts';
 import { AxiError } from '../errors.ts';
 import { type Row, recordOutput } from '../output/views.ts';
-import { openSheet, round, scaleOf, sheetSize } from './common.ts';
+import { openSheet, round, save, scaleOf, sheetSize, str } from './common.ts';
 
 /** How the scale was found, in words. */
 function basisText(scale: Scale): string {
@@ -43,12 +43,19 @@ export function info(input: CommandInput): string {
   }
   const meta = doc.dict(doc.trailer.get('Info'));
   const hidden = sheet.layers.filter((l) => l.hidden).length;
+  const used = new Set(
+    sheet.strokes.filter((s) => s.layer >= 0).map((s) => s.layer),
+  ).size;
   const notes: string[] = [];
   if (!sheet.strokes.length && sheet.images)
     notes.push(
       'This page is a picture, such as a scan: it holds no lines to measure. Ask for the PDF plotted from the CAD file.',
     );
   else if (!sheet.strokes.length) notes.push('This page holds no lines.');
+  if (sheet.strokes.length && sheet.layers.length && !used)
+    notes.push(
+      'No line on this page is on a layer. Tell systems apart by colour: `drawing-axi layers <file.pdf> --split`.',
+    );
   if (sheet.strokes.length && !sheet.layers.length)
     notes.push(
       'The file keeps no layers. Tell systems apart by colour: `drawing-axi layers <file.pdf> --split`.',
@@ -68,9 +75,7 @@ export function info(input: CommandInput): string {
       .filter(Boolean)
       .join(' / '),
     scale,
-    layers: hidden
-      ? `${sheet.layers.length} (${hidden} switched off)`
-      : sheet.layers.length,
+    layers: `${used} with ink on this page, ${sheet.layers.length} in the file${hidden ? ` (${hidden} switched off)` : ''}`,
     geometry: `${sheet.strokes.length} strokes, ${sheet.fills.length} fills, ${sheet.images} images`,
     labels: `${count.shx} stroke-font, ${count.text} font text, ${count.note} notes`,
     size_labels: `${sizes.length} (${sizes.filter((s) => s.onRun).length} written along runs)`,
@@ -81,9 +86,11 @@ export function info(input: CommandInput): string {
     input.values.full === true,
     'drawing-axi layers',
     [
+      sheet.pages > 1
+        ? `Run \`drawing-axi info <file.pdf> --page <n>\` for another of the ${sheet.pages} pages; every command takes --page`
+        : 'Run `drawing-axi scale <file.pdf>` for how the scale was found',
+      'Run `drawing-axi legend <file.pdf>` for which layer each legend line stands for',
       'Run `drawing-axi layers <file.pdf>` for the layers with the length drawn on each',
-      'Run `drawing-axi labels <file.pdf> --match <text>` to read the legend and the notes',
-      'Run `drawing-axi measure <file.pdf> --group <name>=<layer>` for lengths by pipe size',
     ],
   );
 }
@@ -108,7 +115,9 @@ export function scale(input: CommandInput): string {
     sheet_covers: `${round(sheet.width / found.ptPerM, 1)} x ${round(sheet.height / found.ptPerM, 1)} m`,
     one_metre: `${round(found.ptPerM * MM_PER_PT, 2)} mm on paper`,
   };
+  const saved = save(input.io, str(input.values, 'save'), record);
+  if (saved) record.saved = saved;
   return recordOutput(record, true, 'drawing-axi scale', [
-    'Run `drawing-axi measure <file.pdf> --group <name>=<layer>` to measure with this scale',
+    'Run `drawing-axi measure <file.pdf> --group <name>=<layer> --group <name>=<layer>` to measure with this scale',
   ]);
 }
