@@ -1,0 +1,8 @@
+node_modules/
+dist/
+*.tgz
+test/live/.env.*
+!test/live/.env.example
+test/live/reports/
+test/live/private/
+.DS_Store
