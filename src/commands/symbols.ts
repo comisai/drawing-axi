@@ -53,59 +53,88 @@ export function symbols(input: CommandInput): string {
     if (!(error instanceof AxiError) || error.code !== 'scale_unknown')
       throw error;
   }
-  const strokes = picks.flatMap((p) => clipStrokes(strokesOf(sheet, p), area));
-  const fills = sheet.fills.filter(
-    (f) =>
-      picks.some(
-        (p) => p.layer === f.layer && (p.color === null || p.color === f.color),
-      ) && inArea(area, (f.x0 + f.x1) / 2, (f.y0 + f.y1) / 2),
-  );
-  const groups = groupSymbols(strokes, fills, {
-    join: paperMm(joinMm),
-    maxPiece: paperMm(maxMm),
-  });
-  // Symbols of one kind share a size and a number of parts.
+  // Each layer is grouped on its own: a symbol is drawn on one layer, and
+  // pieces of two layers that touch are two things.
+  const sizeText = (w: number, h: number): string =>
+    ptPerM === null
+      ? `${w} x ${h} mm on paper`
+      : `${round(w / MM_PER_PT / ptPerM, 2)} x ${round(h / MM_PER_PT / ptPerM, 2)} m`;
   const kinds = new Map<
     string,
-    { w: number; h: number; parts: number; count: number; x: number; y: number }
+    {
+      layer: string;
+      w: number;
+      h: number;
+      parts: number;
+      count: number;
+      x: number;
+      y: number;
+    }
   >();
-  for (const g of groups) {
-    const w = Math.round((g.x1 - g.x0) * MM_PER_PT * 2) / 2;
-    const h = Math.round((g.y1 - g.y0) * MM_PER_PT * 2) / 2;
-    // A symbol and its quarter turn are one kind.
-    const key = `${Math.max(w, h)}|${Math.min(w, h)}|${g.parts}`;
-    const k = kinds.get(key);
-    if (k) k.count++;
-    else
-      kinds.set(key, {
-        w: Math.max(w, h),
-        h: Math.min(w, h),
+  const places: Row[] = [];
+  let total = 0;
+  for (const pick of picks) {
+    const groups = groupSymbols(
+      clipStrokes(strokesOf(sheet, pick), area),
+      sheet.fills.filter(
+        (f) =>
+          f.layer === pick.layer &&
+          (pick.color === null || pick.color === f.color) &&
+          inArea(area, (f.x0 + f.x1) / 2, (f.y0 + f.y1) / 2),
+      ),
+      { join: paperMm(joinMm), maxPiece: paperMm(maxMm) },
+    );
+    total += groups.length;
+    for (const g of groups) {
+      const a = Math.round((g.x1 - g.x0) * MM_PER_PT * 2) / 2;
+      const b = Math.round((g.y1 - g.y0) * MM_PER_PT * 2) / 2;
+      // A symbol and its quarter turn are one kind.
+      const w = Math.max(a, b);
+      const h = Math.min(a, b);
+      const x = (g.x0 + g.x1) / 2;
+      const y = (g.y0 + g.y1) / 2;
+      places.push({
+        layer: pick.name,
+        size: sizeText(w, h),
         parts: g.parts,
-        count: 1,
-        x: (g.x0 + g.x1) / 2,
-        y: (g.y0 + g.y1) / 2,
+        x: Math.round(x),
+        y: Math.round(y),
       });
+      const key = `${pick.name}|${w}|${h}|${g.parts}`;
+      const k = kinds.get(key);
+      if (k) k.count++;
+      else
+        kinds.set(key, {
+          layer: pick.name,
+          w,
+          h,
+          parts: g.parts,
+          count: 1,
+          x,
+          y,
+        });
+    }
   }
   const rows: Row[] = [...kinds.values()]
     .sort((a, b) => b.count - a.count || b.parts - a.parts)
     .map((k) => ({
-      size:
-        ptPerM === null
-          ? `${k.w} x ${k.h} mm on paper`
-          : `${round(k.w / MM_PER_PT / ptPerM, 2)} x ${round(k.h / MM_PER_PT / ptPerM, 2)} m`,
+      size: sizeText(k.w, k.h),
       parts: k.parts,
       count: k.count,
       first_at: `${Math.round(k.x)},${Math.round(k.y)}`,
+      layer: k.layer,
     }));
+  // The saved copy holds every symbol's place, not only the first of a kind.
   const saved = save(input.io, str(input.values, 'save'), {
     file: name,
     symbols: rows,
+    places,
   });
   const shown = full ? rows : rows.slice(0, limit);
   return listOutput({
     key: 'symbols',
     summary: rows.length
-      ? `${plural(groups.length, 'symbol')} in ${countLine(shown.length, rows.length, 'kind')}, most frequent first`
+      ? `${plural(total, 'symbol')} in ${countLine(shown.length, rows.length, 'kind')}, most frequent first`
       : '0 symbols: the layers hold no small group of strokes',
     head: {
       file: name,
@@ -113,7 +142,11 @@ export function symbols(input: CommandInput): string {
       saved,
     },
     rows: shown,
-    columns: ['size', 'parts', 'count', 'first_at'],
+    // With one layer, every row is on it and the column would say nothing.
+    columns:
+      picks.length > 1
+        ? ['size', 'parts', 'count', 'first_at', 'layer']
+        : ['size', 'parts', 'count', 'first_at'],
     full,
     narrower:
       'drawing-axi symbols <file.pdf> --layer <layer> --region <x0,y0,x1,y1>',

@@ -54,11 +54,11 @@ before(() => {
 describe('home', () => {
   it('lists the PDF files in the folder', async () => {
     const doc = await ok();
-    assert.equal(doc.summary, '4 PDF files in this folder');
+    assert.equal(doc.summary, '5 PDF files in this folder');
     const rows = rowsOf(doc, 'drawings');
     assert.deepEqual(
       rows.map((r) => r.file),
-      ['locked.pdf', 'plan-packed.pdf', 'plan.pdf', 'scan.pdf'],
+      ['locked.pdf', 'odd.pdf', 'plan-packed.pdf', 'plan.pdf', 'scan.pdf'],
     );
     const plan = rows.find((r) => r.file === 'plan.pdf');
     assert.deepEqual(plan, {
@@ -94,7 +94,10 @@ describe('info and scale', () => {
       `${EXPECT.layers} with ink on this page, ${EXPECT.layers} in the file (1 switched off)`,
     );
     assert.equal(doc.labels, '24 stroke-font, 1 font text, 1 notes');
-    assert.equal(doc.size_labels, '9 (4 written along runs)');
+    assert.equal(
+      doc.size_labels,
+      '9 (4 carry a slope or a system code, as a label on a pipe does)',
+    );
     assert.equal(doc.notes, undefined);
   });
 
@@ -183,7 +186,13 @@ describe('labels and tags', () => {
         ['Ø200-1%', 1],
       ],
     );
-    assert.equal(doc.also, '1 font text labels not shown; add --source all');
+    // A search reads every kind of text, so nothing is left out of it.
+    assert.equal(doc.also, undefined);
+    const listing = await ok('labels', 'plan.pdf');
+    assert.equal(
+      listing.also,
+      '1 font text labels not shown; add --source all',
+    );
   });
 
   it('lists labels one by one, in reading order, with their place', async () => {
@@ -221,12 +230,14 @@ describe('labels and tags', () => {
 
   it('counts the sizes the labels name', async () => {
     const doc = await ok('labels', 'plan.pdf', '--sizes');
+    assert.equal(doc.summary, '6 ways a pipe size is written, in 9 labels');
     assert.deepEqual(rowsOf(doc, 'sizes'), [
-      { size: 'Ø110', labels: 4, along_runs: 1 },
-      { size: 'Ø75', labels: 2, along_runs: 0 },
-      { size: '3"', labels: 1, along_runs: 1 },
-      { size: 'Ø160', labels: 1, along_runs: 1 },
-      { size: 'Ø200', labels: 1, along_runs: 1 },
+      { code: '-', size: 'Ø110', slope: '-', labels: 3 },
+      { code: '-', size: 'Ø75', slope: '-', labels: 2 },
+      { code: 'W', size: '3"', slope: '-', labels: 1 },
+      { code: '-', size: 'Ø110', slope: '2%', labels: 1 },
+      { code: '-', size: 'Ø160', slope: '1%', labels: 1 },
+      { code: '-', size: 'Ø200', slope: '1%', labels: 1 },
     ]);
   });
 
@@ -361,11 +372,18 @@ describe('runs and measure', () => {
       layer: 'SEWER',
       size: 'Ø160',
       basis: 'label',
+      label: 'Ø160-1%',
       length_m: 20,
       from: [100, 200],
       to: [655.6, 200],
     });
-    assert.deepEqual(saved.sizes, doc.sizes);
+    // The screen rounds to a tenth of a metre; the file keeps a thousandth.
+    assert.deepEqual(
+      saved.sizes.map(
+        (r: { length_m: number }) => Math.round(r.length_m * 10) / 10,
+      ),
+      rowsOf(doc, 'sizes').map((r) => r.length_m),
+    );
   });
 });
 
@@ -685,5 +703,217 @@ describe('what a worker found hard', () => {
         ['(HDPE)', ')EPDH('],
       ],
     );
+  });
+});
+
+describe('what real sheets showed', () => {
+  it('joins a line across the wider breaks left for its linetype letters', async () => {
+    const doc = await ok('runs', 'odd.pdf', '--layer', 'HYDRANT');
+    assert.deepEqual(
+      rowsOf(doc, 'runs').map((r) => [r.length_m, r.pieces]),
+      [[14, 4]],
+    );
+    assert.match(
+      String(doc.settings),
+      /^pieces up to 8 mm apart on paper are joined, and up to 16 mm where a linetype letter sits in the break;/,
+    );
+    // A smaller gap leaves the letter breaks out of reach.
+    const tight = await ok(
+      'runs',
+      'odd.pdf',
+      '--layer',
+      'HYDRANT',
+      '--gap',
+      '5',
+    );
+    assert.equal(rowsOf(tight, 'runs').length, 4);
+    const layers = await ok('layers', 'odd.pdf', '--match', 'HYDRANT');
+    assert.equal(rowsOf(layers, 'layers')[0]?.run_m, 14);
+  });
+
+  it('gives a coded label only to the group named by that code', async () => {
+    const named = await ok(
+      'measure',
+      'plan.pdf',
+      '--group',
+      'W=WATER@#0000ff',
+      '--group',
+      'rain=RAIN',
+      '--region',
+      PLAN,
+    );
+    assert.match(
+      String(named.settings),
+      /; labels coded W go only to the groups of those names;/,
+    );
+    assert.deepEqual(
+      rowsOf(named, 'sizes').map((r) => [r.group, r.size, r.length_m]),
+      [
+        ['W', '3"', 9],
+        ['rain', 'Ø110', 12],
+      ],
+    );
+    // Name another group W, and the water line can no longer take the label.
+    const other = await ok(
+      'measure',
+      'plan.pdf',
+      '--group',
+      'W=RAIN',
+      '--group',
+      'pipes=WATER@#0000ff',
+      '--region',
+      PLAN,
+    );
+    assert.deepEqual(
+      rowsOf(other, 'sizes').map((r) => [r.group, r.size, r.length_m]),
+      [
+        ['W', 'Ø110', 12],
+        ['pipes', 'unsized', 9],
+      ],
+    );
+  });
+
+  it('shows which label sized what, and saves it with exact lengths', async () => {
+    const doc = await ok('measure', 'plan.pdf', ...GROUPS, '--save', 'e.json');
+    assert.deepEqual(rowsOf(doc, 'sized_by'), [
+      {
+        group: 'sewer',
+        size: 'Ø160',
+        label: 'Ø160-1%',
+        labelled_m: 20,
+        runs: 1,
+      },
+      {
+        group: 'sewer',
+        size: 'Ø200',
+        label: 'Ø200-1%',
+        labelled_m: 8,
+        runs: 1,
+      },
+      {
+        group: 'rain',
+        size: 'Ø110',
+        label: 'Ø110-2%',
+        labelled_m: 12,
+        runs: 1,
+      },
+      { group: 'water', size: '3"', label: 'W-3"', labelled_m: 9, runs: 1 },
+    ]);
+    const saved = JSON.parse(readFileSync(join(dir, 'e.json'), 'utf8'));
+    assert.deepEqual(saved.labels, doc.sized_by);
+    assert.deepEqual(
+      saved.runs.map((r: { label: string | null }) => r.label),
+      ['Ø160-1%', null, 'Ø200-1%', null, 'Ø110-2%', null, 'W-3"'],
+    );
+    // A fire line of 15 m exactly, kept to a thousandth of a metre.
+    assert.equal(saved.groups[2].length_m, 15);
+    assert.equal(
+      saved.sizes.every((r: { length_m: number }) =>
+        Number.isInteger(Math.round(r.length_m * 1000)),
+      ),
+      true,
+    );
+  });
+
+  it('lists a coded label that names a size but sits apart from the pipe', async () => {
+    const doc = await ok(
+      'measure',
+      'odd.pdf',
+      '--group',
+      'HF=HYDRANT',
+      '--save',
+      'h.json',
+    );
+    assert.deepEqual(
+      rowsOf(doc, 'sizes').map((r) => [r.group, r.size, r.length_m]),
+      [['HF', 'unsized', 14]],
+    );
+    assert.deepEqual(rowsOf(doc, 'labels_apart'), [
+      { group: 'HF', size: '4"', label: 'HF-Ø4"', labels: 1 },
+    ]);
+    const saved = JSON.parse(readFileSync(join(dir, 'h.json'), 'utf8'));
+    assert.deepEqual(saved.labels_apart, doc.labels_apart);
+    // A group that is not named by the code does not claim the label.
+    const plain = await ok('measure', 'odd.pdf', '--group', 'hydrant=HYDRANT');
+    assert.equal(plain.labels_apart, undefined);
+  });
+
+  it('takes a layer whose name holds a plus sign, alone or joined to another', async () => {
+    const one = await ok('measure', 'odd.pdf', '--group', 'x=A+B');
+    assert.deepEqual(
+      rowsOf(one, 'groups').map((r) => [r.group, r.length_m]),
+      [['x', 5]],
+    );
+    const two = await ok('measure', 'odd.pdf', '--group', 'x=C+A+B');
+    assert.equal(rowsOf(two, 'groups')[0]?.length_m, 8);
+    const none = await fails(
+      'unknown_layer',
+      1,
+      'measure',
+      'odd.pdf',
+      '--group',
+      'x=A+Z',
+    );
+    assert.match(String(none.message), /no layer named `A`/);
+  });
+
+  it('pairs a tag with a size written in font text, and saves every place', async () => {
+    const doc = await ok('tags', 'odd.pdf', '--save', 't.json');
+    assert.deepEqual(rowsOf(doc, 'tags'), [
+      { series: 'R', size: '4"', count: 1, tags: 'R1' },
+    ]);
+    const saved = JSON.parse(readFileSync(join(dir, 't.json'), 'utf8'));
+    assert.deepEqual(saved.places, [
+      { tag: 'R1', series: 'R', size: '4"', x: 600, y: 200 },
+    ]);
+  });
+
+  it('groups symbols layer by layer, and saves where each one is', async () => {
+    const doc = await ok(
+      'symbols',
+      'plan.pdf',
+      '--layer',
+      'SYMBOLS',
+      '--layer',
+      'RAIN',
+      '--save',
+      'y.json',
+    );
+    const rows = rowsOf(doc, 'symbols');
+    // Every row names its layer, and a layer's symbols are counted alone.
+    assert.deepEqual(
+      rows.filter((r) => r.layer === 'SYMBOLS').map((r) => [r.count, r.parts]),
+      [
+        [4, 1],
+        [2, 2],
+      ],
+    );
+    assert.ok(rows.every((r) => r.layer === 'SYMBOLS' || r.layer === 'RAIN'));
+    const saved = JSON.parse(readFileSync(join(dir, 'y.json'), 'utf8'));
+    assert.equal(
+      saved.places.filter((p: { layer: string }) => p.layer === 'SYMBOLS')
+        .length,
+      6,
+    );
+    // With one layer the column is left out.
+    const single = await ok('symbols', 'plan.pdf', '--layer', 'SYMBOLS');
+    assert.equal(rowsOf(single, 'symbols')[0]?.layer, undefined);
+    assert.deepEqual(saved.places[0], {
+      layer: 'SYMBOLS',
+      size: '0.2 x 0.2 m',
+      parts: 1,
+      x: 400,
+      y: 320,
+    });
+  });
+
+  it("lists only the drawing's own layers when asked", async () => {
+    const all = await ok('layers', 'plan.pdf', '--region', PLAN);
+    const own = await ok('layers', 'plan.pdf', '--region', PLAN, '--own');
+    const names = (doc: Record<string, unknown>) =>
+      rowsOf(doc, 'layers').map((r) => String(r.layer));
+    assert.ok(names(all).includes('XREF|Walls'));
+    assert.ok(!names(own).includes('XREF|Walls'));
+    assert.equal(names(own).length, names(all).length - 1);
   });
 });

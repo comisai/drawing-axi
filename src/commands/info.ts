@@ -78,7 +78,7 @@ export function info(input: CommandInput): string {
     layers: `${used} with ink on this page, ${sheet.layers.length} in the file${hidden ? ` (${hidden} switched off)` : ''}`,
     geometry: `${sheet.strokes.length} strokes, ${sheet.fills.length} fills, ${sheet.images} images`,
     labels: `${count.shx} stroke-font, ${count.text} font text, ${count.note} notes`,
-    size_labels: `${sizes.length} (${sizes.filter((s) => s.onRun).length} written along runs)`,
+    size_labels: `${sizes.length} (${sizes.filter((s) => s.onRun).length} carry a slope or a system code, as a label on a pipe does)`,
     notes,
   };
   return recordOutput(

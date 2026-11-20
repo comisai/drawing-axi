@@ -67,7 +67,7 @@ scale: "1:100, 27.78 pt per m (stated ratio, refined by the scale bar)"
 layers: "9 with ink on this page, 9 in the file (1 switched off)"
 geometry: "243 strokes, 2 fills, 0 images"
 labels: "24 stroke-font, 1 font text, 1 notes"
-size_labels: 9 (4 written along runs)
+size_labels: "9 (4 carry a slope or a system code, as a label on a pipe does)"
 ```
 
 ```sh
@@ -105,15 +105,20 @@ sizes[5]{group,size,length_m,labelled_m,runs}:
   sewer,unsized,5,null,1
   rain,Ø110,12,12,1
   fire,unsized,15,null,1
+sized_by[3]{group,size,label,labelled_m,runs}:
+  sewer,Ø160,Ø160-1%,20,1
+  sewer,Ø200,Ø200-1%,8,1
+  rain,Ø110,Ø110-2%,12,1
 ```
 
-`box` is the legend's own area: the legend holds sample lines on the pipe layers, so a takeoff leaves it out. The fourth size label belongs to the water pipe, which this command did not measure. `--save` writes every run with its group, size and ends as JSON, so a program can build the workbook without retyping numbers.
+`box` is the legend's own area: the legend holds sample lines on the pipe layers, so a takeoff leaves it out. The fourth size label belongs to the water pipe, which this command did not measure. `sized_by` shows which label sized what, so a label of another system on a row is a wrong pairing to check. `--save` writes every run with its group, size, label and ends as JSON, to a thousandth of a metre, so a program can build the workbook without retyping numbers.
 
 ### What the numbers mean
 
-- **Runs.** A pipe is plotted as dashes, and broken where a letter or a label sits on it. A run joins pieces that lie on one line and end near each other, and is measured end to end. Curved pipe and runs shorter than 6 mm on paper are left out.
+- **Runs.** A pipe is plotted as dashes, and broken where a letter or a label sits on it. A run joins pieces that lie on one line and end near each other, and is measured end to end. A break with a linetype letter in it, such as the F of a fire line, is joined up to twice as wide. Curved pipe and runs shorter than 6 mm on paper are left out.
 - **Scale.** The ratio comes from the title block. A plot is often a little off its stated scale, so the factor is refined from the printed scale bar when one is found. `drawing-axi scale` shows both. Pass `--scale 1:N` or `--pt-per-m` when the sheet is wrong or silent.
 - **Sizes.** A run takes the size of a label written along it: just beside the line, or in a break left in the line for it. A line that passes through the middle of a label's text is another pipe, and takes nothing. A run without a label takes the size of the runs of its own group that it touches, when they all agree. `labelled_m` is the part sized by a label of its own.
+- **System codes.** A label such as `F-Ø4"` or `CW1-Ø3"` starts with its system's code. Name a group by that code (`--group F=<layer>`, `--group CW=<layer>`) and it takes only those labels, and no other group takes them. Digits and dots do not count: `C.W.2` is `CW`. A coded label that sits on no run, as one on a leader does, is listed under `labels_apart`: the sheet names that size for the system, and does not say which pipe. It is a size to confirm, not a measured one.
 - **Unsized.** What no label sizes is reported as `unsized`. The tool never guesses a size.
 - **Not on a plan.** Vertical lengths, fittings, hangers and insulation are not drawn to scale on a plan. `tags` and `symbols` count what the sheet marks; the rest needs rules or a person.
 

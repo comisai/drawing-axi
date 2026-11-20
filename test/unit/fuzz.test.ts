@@ -75,7 +75,14 @@ it('Damaged files: every one ends in a known error or a sheet, and none is slow'
         } catch (error) {
           if (!(error instanceof ScaleUnknown)) throw error;
         }
-        const runs = buildRuns(segmentsOf(sheet.strokes), { gap: 22 });
+        const runs = buildRuns(segmentsOf(sheet.strokes), {
+          gap: 22,
+          letterGap: 44,
+          letters: sheet.labels.map((l) => ({
+            x: (l.x0 + l.x1) / 2,
+            y: (l.y0 + l.y1) / 2,
+          })),
+        });
         sizeRuns(
           runs.map((r) => ({ ...r, group: 0 })),
           sizeLabels(sheet.labels),

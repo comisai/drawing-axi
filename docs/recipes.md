@@ -19,7 +19,7 @@ drawing-axi layers plan.pdf --limit 30
 drawing-axi layers plan.pdf --split --match WATER
 ```
 
-The legend gives the drawing's own words. `layers` shows what the legend leaves out. `--split` shows when one layer holds two colours; then name the colour: `WATER@#0000ff`.
+The legend gives the drawing's own words. `layers` shows what the legend leaves out. `--split` shows when one layer holds two colours; then name the colour: `WATER@#0000ff`. `--own` leaves out the layers of referenced files, which are mostly the architect's background: `drawing-axi layers plan.pdf --own --split --save layers.json` is every layer of the drawing itself, by colour, as a file.
 
 If `legend` finds nothing, find the legend's place and draw a box round it:
 
@@ -40,6 +40,10 @@ drawing-axi measure plan.pdf \
 - Put every system in one command, so a label goes to its own pipe and not to a neighbour's.
 - Exclude the legend, and a title block or detail that holds lines on the pipe layers. `legend` prints its own `box`; read other boxes off a picture with `render --grid`.
 - `size_labels` says how many size labels found a run. Labels that found none belong to pipe you did not measure, or sit too far from any run.
+- When labels carry a system code (`F-Ø4"`, `CW1-Ø3"`: see `drawing-axi labels plan.pdf --sizes`), name each group by its code: `--group F=FIRE --group CW=WATER`. A coded label then sizes only the group of that code.
+- `sized_by` shows which label sized what. Check it: a label of another system there is a wrong pairing.
+- `labels_apart` lists coded labels that sit on no run. The sheet names that size for the system without saying which pipe: report it as the sheet's stated size, to confirm, and leave the rows unsized.
+- A layer whose name holds a `+` works as it is written: `--group x=A+B`.
 - `unsized` rows are pipe with no label along it. Size them from riser tags or the legend, with the owner. Never guess.
 
 ## Where is that run?
@@ -59,7 +63,7 @@ drawing-axi tags plan.pdf --exclude 1000,0,1400,900
 drawing-axi tags plan.pdf --each --match '^O|Ø'
 ```
 
-A tag is an identifier with a size beside it. What a series letter means is in the legend or the notes: `drawing-axi labels plan.pdf --match <word>`.
+A tag is an identifier with a size beside it. What a series letter means is in the legend or the notes: `drawing-axi labels plan.pdf --match <word>`. `--save` writes every tag with its place, so a tag on both the floor sheet and the ceiling sheet of a level can be matched and counted once.
 
 ## How many of this symbol?
 
@@ -68,7 +72,7 @@ drawing-axi symbols plan.pdf --layer SYMBOLS
 drawing-axi render plan.pdf --layer SYMBOLS --region 380,300,600,400 --out symbols.svg
 ```
 
-`symbols` counts groups of the same size and make-up. It does not know what they are: render one `first_at` and look.
+`symbols` counts groups of the same size and make-up, each layer on its own. It does not know what they are: render one `first_at` and look. `--save` writes the place of every symbol.
 
 ## What does the sheet say about …?
 
