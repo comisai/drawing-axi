@@ -20,7 +20,7 @@ npm can trust the workflow through OIDC ([trusted publishing](https://docs.npmjs
    git tag v<x.y.z> && git push origin v<x.y.z>
    ```
 
-4. The workflow checks that the tag matches `package.json`, runs every check, and publishes. A new package version can show as a staged placeholder for about a minute before it appears.
+4. The workflow checks that the tag matches `package.json`, runs every check, and publishes. A new package first shows a staged placeholder version (`0.0.0-stage`). The real version followed about three minutes later, and its tarball answered 404 for about three minutes more. Wait for the tarball before installing.
 5. Check the result: `npm view drawing-axi@<x.y.z> dist.attestations` names the provenance, and `npm audit signatures` in a project that installs it verifies the signatures.
 
 Comis pins one version with its attestations and a release-age rule. Moving Comis to a new version is a separate Comis pull request.
