@@ -64,7 +64,7 @@ file: plan.pdf
 page: 1 of 2
 sheet: 494 x 317 mm
 scale: "1:100, 27.78 pt per m (stated ratio, refined by the scale bar)"
-layers: 9 (1 switched off)
+layers: "9 with ink on this page, 9 in the file (1 switched off)"
 geometry: "243 strokes, 2 fills, 0 images"
 labels: "24 stroke-font, 1 font text, 1 notes"
 size_labels: 9 (4 written along runs)
@@ -76,6 +76,7 @@ drawing-axi legend plan.pdf
 
 ```text
 summary: 4 legend lines paired with the layer its sample is drawn on
+box: "1050,93,1360,202"
 legend[4]{text,layer,color,at}:
   צנרת ביוב,SEWER,"#ff00ff","1280,110"
   צנרת ניקוז מי גשם,RAIN,"#00bfff","1280,135"
@@ -87,12 +88,13 @@ The captions read sewer pipe, rainwater drain pipe, fire water pipe (F) and cold
 
 ```sh
 drawing-axi measure plan.pdf --group sewer=SEWER --group rain=RAIN --group fire=FIRE \
-  --exclude 1000,0,1400,900 --save takeoff.json
+  --exclude 1050,93,1360,202 --save takeoff.json
 ```
 
 ```text
 summary: "3 groups, 70 m in 6 runs"
 scale: "1:100, 27.78 pt per m (stated ratio, refined by the scale bar)"
+size_labels: "3 of 4 size labels in the area sit on a measured run; the others belong to pipe that is not in these groups, or fit no run"
 groups[3]{group,length_m,runs,sized_m,unsized_m}:
   sewer,43,4,38,5
   rain,12,1,12,0
@@ -105,7 +107,7 @@ sizes[5]{group,size,length_m,labelled_m,runs}:
   fire,unsized,15,null,1
 ```
 
-`--save` writes every run with its group, size and ends as JSON, so a program can build the workbook without retyping numbers.
+`box` is the legend's own area: the legend holds sample lines on the pipe layers, so a takeoff leaves it out. The fourth size label belongs to the water pipe, which this command did not measure. `--save` writes every run with its group, size and ends as JSON, so a program can build the workbook without retyping numbers.
 
 ### What the numbers mean
 
@@ -117,7 +119,7 @@ sizes[5]{group,size,length_m,labelled_m,runs}:
 
 ### Hebrew and other stroke-font text
 
-CAD stroke fonts keep text in the file as the keys the drafter typed. drawing-axi turns `%%C` into Ø, reads Hebrew typed on Latin keys, puts digits stored back to front in reading order, and leaves Latin text alone. `labels --each --full` shows the stored text beside the decoded text.
+CAD stroke fonts keep text in the file as the keys the drafter typed. drawing-axi turns `%%C` into Ø, reads Hebrew typed on Latin keys, puts digits stored back to front in reading order, and leaves Latin text alone. `labels --each --full` adds the stored text wherever decoding changed it.
 
 ## Exit codes and errors
 

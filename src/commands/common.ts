@@ -367,6 +367,9 @@ export const round = (value: number, digits = 1): number => {
 export const sheetSize = (sheet: Sheet): string =>
   `${Math.round(sheet.width * MM_PER_PT)} x ${Math.round(sheet.height * MM_PER_PT)} mm`;
 
+/** The name ink on no layer is listed under. */
+export const NO_LAYER = '(no layer)';
+
 export interface LayerPick {
   /** Index into sheet.layers. */
   layer: number;
@@ -401,6 +404,8 @@ export function pickLayer(sheet: Sheet, spec: string): LayerPick {
   }
   name = name.trim();
   if (!name) throw usage('A layer name is missing.');
+  // Ink on no layer is listed under this name, and can be measured by it.
+  if (name === NO_LAYER) return { layer: -1, name: NO_LAYER, color };
   let index = sheet.layers.findIndex((l) => l.name === name);
   if (index < 0) {
     const matches = sheet.layers

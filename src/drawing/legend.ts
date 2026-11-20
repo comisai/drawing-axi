@@ -13,6 +13,11 @@ export interface LegendEntry {
   /** The caption's place. */
   x: number;
   y: number;
+  /** The box round the caption and its sample. */
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
 }
 
 export interface LegendOptions {
@@ -52,6 +57,9 @@ export function readLegend(
   // mostly sit inside label boxes is lettering, and holds no samples.
   const boxes = new Map<number, Label[]>();
   for (const label of labels) {
+    // Lettering is small. A box that covers many cells is not a text line.
+    if (label.x1 - label.x0 > cell * 24 || label.y1 - label.y0 > cell * 24)
+      continue;
     for (
       let gx = Math.floor(label.x0 / cell);
       gx <= Math.floor(label.x1 / cell);
@@ -196,6 +204,10 @@ export function readLegend(
       color: sample.color,
       x: (label.x0 + label.x1) / 2,
       y: (label.y0 + label.y1) / 2,
+      x0: Math.min(label.x0, sample.x0),
+      y0: Math.min(label.y0, sample.y),
+      x1: Math.max(label.x1, sample.x1),
+      y1: Math.max(label.y1, sample.y),
     });
   }
   entries.sort((a, b) => a.y - b.y || a.x - b.x);

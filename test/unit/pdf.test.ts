@@ -23,7 +23,12 @@ import {
   PdfString,
   Ref,
 } from '../../src/pdf/objects.ts';
-import type { PdfOptions } from '../fixtures/pdf.ts';
+import {
+  buildPdf,
+  type Comment,
+  Content,
+  type PdfOptions,
+} from '../fixtures/pdf.ts';
 import { sampleDrawing } from '../fixtures/sample.ts';
 import { sampleSheet } from '../helpers.ts';
 
@@ -260,6 +265,41 @@ describe('document', () => {
         assert.ok(error instanceof Error, 'fails with an error, not a hang');
       }
     }
+  });
+});
+
+describe('geometry from a damaged file', () => {
+  const page = (content: Content, comments: Comment[] = [], width = 400) =>
+    readSheet(
+      PdfDocument.open(buildPdf([{ width, height: 300, content, comments }])),
+      0,
+    );
+
+  it('drops strokes and labels far outside the sheet, and says so', () => {
+    const content = new Content()
+      .pen(0, 1)
+      .line(10, 10, 200, 10)
+      .line(10, 20, 1e9, 20)
+      .line(-5000, 30, 100, 30);
+    const sheet = page(content, [
+      { text: 'near', x0: 20, y0: 40, x1: 60, y1: 52 },
+      { text: 'far', x0: 20, y0: 60, x1: 1e15, y1: 72 },
+      { text: 'huge', x0: 0, y0: 0, x1: 399, y1: 299 },
+      { text: 'wide', x0: -100, y0: 80, x1: 380, y1: 92 },
+    ]);
+    assert.equal(sheet.strokes.length, 1);
+    assert.deepEqual(
+      sheet.labels.map((l) => l.raw),
+      ['near', 'huge'],
+    );
+    assert.deepEqual(sheet.skipped, ['4 items far outside the sheet']);
+  });
+
+  it('refuses a page whose size is not usable', () => {
+    assert.throws(
+      () => page(new Content().line(0, 0, 1, 1), [], 1e9),
+      /page size is not usable/,
+    );
   });
 });
 
