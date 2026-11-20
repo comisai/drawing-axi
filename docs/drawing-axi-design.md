@@ -201,7 +201,7 @@ A run takes the size most of its labels state. A run with none takes the size of
 
 Measure every system in one command. Labels then go to the right system's run and not to a neighbour's. `measure` prints how many size labels found a run.
 
-**System codes.** A prefix is the system's code: `F`, `CW1`, `C.W.2`, `H.F.`, reduced to its letters. Pipes of two systems often run side by side, and a label beside one is also near the other. When a group is named by a code that the sheet's labels carry, a label with that code sizes only that group, and that group takes no label with another code. A label with no code, such as `Ø160-1%`, goes to the run it fits best, as before.
+**System codes.** A prefix is the system's code: `F`, `CW1`, `C.W.2`, `H.F.`, reduced to its letters. Pipes of two systems often run side by side, and a label beside one is also near the other. When a group is named by a code that the sheet's labels carry, a label with that code sizes only that group, and that group takes no label with another code. A label with no code, such as `Ø160-1%`, goes to the run it fits best, as before. A label written in a break of a line is that line's whatever the groups are called: the break is stronger evidence than a name. In a live run a worker named the legend's water colour `W`, and the label `W-3"` sat in a break of a line of another colour; the code rule alone left that line unsized.
 
 **Evidence.** `measure` prints `sized_by`: for each group and size, the label text that sized it and how many metres. The saved runs carry the label too. A wrong pairing is then visible instead of hidden in a total.
 

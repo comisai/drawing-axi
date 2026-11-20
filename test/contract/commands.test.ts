@@ -753,7 +753,9 @@ describe('what real sheets showed', () => {
         ['rain', 'Ø110', 12],
       ],
     );
-    // Name another group W, and the water line can no longer take the label.
+    // Name another group W: the label is written in a break of the water
+    // line, so it still sizes that line. (A label beside a line follows the
+    // code; the unit tests hold that.)
     const other = await ok(
       'measure',
       'plan.pdf',
@@ -768,9 +770,35 @@ describe('what real sheets showed', () => {
       rowsOf(other, 'sizes').map((r) => [r.group, r.size, r.length_m]),
       [
         ['W', 'Ø110', 12],
-        ['pipes', 'unsized', 9],
+        ['pipes', '3"', 9],
       ],
     );
+  });
+
+  it('gives a label in a break of a line to that line, whatever the groups are called', async () => {
+    // The legend shows water in cyan, so a worker names that colour W. The
+    // label W-3" is written in a break of the blue line.
+    const doc = await ok(
+      'measure',
+      'plan.pdf',
+      '--group',
+      'W=WATER@#00ffff',
+      '--group',
+      'blue=WATER@#0000ff',
+      '--region',
+      PLAN,
+    );
+    assert.deepEqual(
+      rowsOf(doc, 'sizes').map((r) => [r.group, r.size, r.length_m]),
+      [
+        ['W', 'unsized', 3],
+        ['blue', '3"', 9],
+      ],
+    );
+    assert.deepEqual(rowsOf(doc, 'sized_by'), [
+      { group: 'blue', size: '3"', label: 'W-3"', labelled_m: 9, runs: 1 },
+    ]);
+    assert.equal(doc.labels_apart, undefined);
   });
 
   it('shows which label sized what, and saves it with exact lengths', async () => {
