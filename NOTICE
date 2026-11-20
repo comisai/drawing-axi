@@ -1,0 +1,16 @@
+drawing-axi
+Copyright (c) 2026 drawing-axi contributors. MIT License; see LICENSE.
+
+src/cli/parse.ts, src/output/text.ts, src/output/toon.ts and parts of
+src/cli/run.ts and src/output/views.ts are taken from ituran-axi
+(https://github.com/comisai/ituran-axi), MIT License,
+Copyright (c) 2026 ituran-axi contributors: strict argument parsing, text
+safety, TOON rendering with size bounds, and the list and record views.
+
+The PDF reader in src/pdf/ is written for this project from the PDF
+specification (ISO 32000). It includes no code from another PDF library.
+
+Runtime dependency: @toon-format/toon 4.4.0, MIT License.
+
+AutoCAD is a trademark of Autodesk, Inc. This project is not made or endorsed
+by Autodesk.

@@ -1,0 +1,235 @@
+// One made-up plumbing sheet, drawn the way CAD plots come: named layers,
+// lines plotted as dashes, stroke-font text kept as comments (Hebrew typed on
+// Latin keys), a scale bar, a legend, riser tags and symbols. Every length is
+// chosen here, so tests can state the exact answer.
+
+import {
+  buildPdf,
+  type Comment,
+  Content,
+  type PageSpec,
+  type PdfOptions,
+} from './pdf.ts';
+
+/** The sheet says 1:100 and is plotted at 98% of it. */
+export const PLOT_FACTOR = 0.98;
+export const PT_PER_M = (72 / 25.4) * 10 * PLOT_FACTOR;
+const m = (metres: number): number => metres * PT_PER_M;
+
+export const SHEET = { width: 1400, height: 900 };
+/** The plan, without the legend and the scale bar. */
+export const PLAN = '0,0,1000,900';
+
+export const COLORS = {
+  sewer: 0xff00ff,
+  rain: 0x00bfff,
+  fire: 0xff0000,
+  water: 0x0000ff,
+  waterBranch: 0x00ffff,
+  walls: 0xadadad,
+  ink: 0x000000,
+};
+
+/** A reviewer's remark, long enough to be cut in default output. */
+export const REVIEW_NOTE = `Check ${'the falls on this branch and '.repeat(22)}confirm.`;
+
+/** What the sheet holds, in metres, for tests to assert against. */
+export const EXPECT = {
+  sewer: { total: 43, d160: 30, d160Labelled: 20, d200: 8, unsized: 5 },
+  rain: { total: 12, d110: 12 },
+  fire: { total: 15 },
+  water: { total: 9, branch: 3 },
+  tags: { O: 3, G: 2 },
+  squares: 4,
+  triangles: 2,
+  layers: 9,
+};
+
+export function samplePages(): PageSpec[] {
+  const c = new Content();
+  const comments: Comment[] = [];
+  const lettering: Array<[number, number, number, number]> = [];
+  /** A stroke-font label: a comment, and a few strokes where its glyphs are. */
+  const label = (text: string, cx: number, cy: number, w: number, h = 13) => {
+    comments.push({
+      text,
+      x0: cx - w / 2,
+      y0: cy - h / 2,
+      x1: cx + w / 2,
+      y1: cy + h / 2,
+    });
+    lettering.push([cx - w / 2, cy - h / 2, w, h]);
+  };
+  // The building's outline, from an architect's reference file.
+  c.layer('XREF|Walls')
+    .pen(COLORS.walls, 0.7)
+    .polyline(
+      [
+        [60, 60],
+        [980, 60],
+        [980, 860],
+        [60, 860],
+      ],
+      's',
+    )
+    .text('NOTE A', 80, 80)
+    .end();
+
+  // Sewer: A 20 m with a size, B 10 m joined to it, C 8 m with a size, D 5 m bare.
+  c.layer('SEWER').pen(COLORS.sewer, 2);
+  c.dashes(100, 200, 100 + m(20), 200);
+  c.dashes(100 + m(20), 200, 100 + m(20), 200 + m(10));
+  c.dashes(100, 480, 100 + m(8), 480);
+  c.dashes(100, 540, 100 + m(5), 540);
+  c.end();
+  label('%%C160-1%', 100 + m(10), 194.5, 46);
+  label('%%C200-1%', 100 + m(4), 474.5, 46);
+
+  // Rain: 12 m, its size written just above it.
+  c.layer('RAIN')
+    .pen(COLORS.rain, 2)
+    .dashes(100, 620, 100 + m(12), 620)
+    .end();
+  label('%%C110-2%', 100 + m(6), 614.5, 46);
+
+  // Fire: 15 m passing straight through the middle of the rain pipe's label.
+  // It is plotted with breaks for its linetype letter.
+  c.layer('FIRE')
+    .pen(COLORS.fire, 0.6)
+    .dashes(100, 614.5, 100 + m(15), 614.5, 60, 16)
+    .end();
+
+  // Water: 9 m, broken to make room for its own label; and a 3 m branch in
+  // another colour of the same layer.
+  const wx = 100 + m(4.5);
+  c.layer('WATER')
+    .pen(COLORS.water, 1.5)
+    .line(100, 720, wx - 10, 720)
+    .line(wx + 10, 720, 100 + m(9), 720)
+    .pen(COLORS.waterBranch, 1.5)
+    .line(100, 780, 100 + m(3), 780)
+    .end();
+  label('W-3"', wx, 720, 18, 8);
+
+  // Riser tags: an identifier over a size.
+  const tag = (id: string, size: string, x: number, y: number) => {
+    label(id, x, y, 22, 12);
+    label(size, x, y + 13, 30, 12);
+  };
+  tag('O1', '%%C110', 700, 300);
+  tag('O2', '%%C110', 780, 300);
+  tag('O3', '%%C110', 860, 300);
+  tag('G1', '%%C75', 700, 380);
+  tag('G2', '%%C75', 780, 380);
+
+  // Symbols: four squares, and two triangles each with a filled dot.
+  c.layer('SYMBOLS').pen(COLORS.ink, 0.7);
+  for (const [x, y] of [
+    [400, 320],
+    [460, 320],
+    [520, 320],
+    [580, 320],
+  ] as const)
+    c.square(x, y, 6);
+  for (const [x, y] of [
+    [420, 380],
+    [500, 380],
+  ] as const) {
+    c.polyline(
+      [
+        [x - 5, y + 4],
+        [x + 5, y + 4],
+        [x, y - 5],
+      ],
+      's',
+    );
+    c.polyline(
+      [
+        [x - 1, y],
+        [x + 1, y],
+        [x + 1, y + 2],
+        [x - 1, y + 2],
+      ],
+      'f',
+    );
+  }
+  c.end();
+
+  // A layer that is switched off: a line a viewer does not show.
+  c.layer('OLD')
+    .pen(COLORS.ink, 1)
+    .line(100, 840, 100 + m(25), 840)
+    .end();
+
+  // Notes in a Hebrew stroke font, a Latin length note, and reversed Latin.
+  label('p,j 02X002 x"n', 300, 100, 80);
+  label('l=15.90', 500, 100, 40);
+  label(')EPDH(', 620, 100, 40);
+
+  // A long remark a reviewer left on the sheet.
+  comments.push({
+    text: REVIEW_NOTE,
+    x0: 840,
+    y0: 700,
+    x1: 960,
+    y1: 760,
+    author: 'Reviewer',
+  });
+
+  // The legend: a caption with a sample line on the layer it names.
+  label('nert', 1300, 85, 30);
+  const legend = (caption: string, y: number, layer: string, color: number) => {
+    c.layer(layer).pen(color, 1.5).line(1060, y, 1120, y).end();
+    label(caption, 1280, y, 140);
+  };
+  legend('mbr, chuc', 110, 'SEWER', COLORS.sewer);
+  legend('mbr, bheuz nh dao', 135, 'RAIN', COLORS.rain);
+  legend('mbr, nho fcuh ta )F(', 160, 'FIRE', COLORS.fire);
+  legend('mbr, nho erho', 185, 'WATER', COLORS.waterBranch);
+
+  // The scale bar: ten one-metre cells, every other one hatched.
+  c.layer('TITLE').pen(COLORS.ink, 0.7);
+  const bx = 1090;
+  c.line(bx, 820, bx + m(10), 820).line(bx, 826, bx + m(10), 826);
+  for (let cell = 0; cell < 10; cell += 2)
+    for (let k = 1; k <= 5; k++)
+      c.line(
+        bx + m(cell) + (m(1) * k) / 6,
+        820.6,
+        bx + m(cell) + (m(1) * k) / 6,
+        825.4,
+      );
+  c.end();
+  label('1 : 100', 1340, 806, 40);
+  label('ebwwn', 1290, 806, 30);
+
+  // Lettering: the strokes a stroke font draws inside each label's box.
+  c.layer('TEXT').pen(COLORS.ink, 0.5);
+  for (const [x, y, w, h] of lettering)
+    for (let k = 1; k <= 4; k++)
+      c.line(x + (w * k) / 5, y + h * 0.3, x + (w * k) / 5, y + h * 0.7);
+  c.end();
+
+  // A second page: a detail at another scale, with no layers and no comments.
+  const detail = new Content();
+  detail.pen(COLORS.ink, 1).line(20, 100, 220, 100).text('SCALE 1:50', 20, 30);
+
+  return [
+    { ...SHEET, content: c, comments },
+    { width: 300, height: 200, content: detail },
+  ];
+}
+
+export function sampleDrawing(options: PdfOptions = {}): Buffer {
+  return buildPdf(samplePages(), { hidden: ['OLD'], ...options });
+}
+
+/** A page that is one picture and nothing else, as a scan is. */
+export function scanLike(): Buffer {
+  const c = new Content();
+  c.ops.push({
+    kind: 'raw',
+    text: 'q 200 0 0 100 0 0 cm BI /W 1 /H 1 /CS /G /BPC 8 ID \x00 EI Q',
+  });
+  return buildPdf([{ width: 200, height: 100, content: c }]);
+}

@@ -1,0 +1,43 @@
+name: release
+# Publishes drawing-axi to npm with signed provenance when a v* tag is pushed.
+# Comis installs AXIs only when their provenance names the source repository
+# (D335; scripts/axi-publishers.mjs), and npm provenance needs a public
+# repository (master plan V1). The job publishes with the NPM_TOKEN secret of
+# the `npm` environment, which deploys only from release tags; the OIDC token
+# (id-token: write) signs the provenance. docs/releasing.md says how to move
+# to trusted publishing later.
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: npm
+    steps:
+      - name: Refuse a private repository
+        if: ${{ github.event.repository.private }}
+        run: |
+          echo "npm provenance needs a public repository; make comisai/drawing-axi public first (master plan V1)."
+          exit 1
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Tag matches package.json
+        run: test "v$(node -p "require('./package.json').version")" = "${GITHUB_REF_NAME}"
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run build
+      - run: npm test
+      - run: npm run test:dist
+      - run: node scripts/check-package.mjs
+      - name: Publish with provenance
+        run: npm publish --provenance --access public --ignore-scripts
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -1,0 +1,21 @@
+name: Feature request
+description: A new command, flag or behaviour.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What you need
+      description: What you are trying to read off a drawing, and why the current commands do not cover it.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: The command, flags and output you have in mind, if any.
+  - type: textarea
+    id: drawing
+    attributes:
+      label: How the drawing shows it
+      description: How a person reads this off the sheet. drawing-axi reads what a PDF holds - layers, lines, labels - and never the network or other files. Do not attach a real drawing.
