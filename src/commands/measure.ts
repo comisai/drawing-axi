@@ -5,8 +5,10 @@ import type { CommandInput } from '../cli/table.ts';
 import type { Sheet } from '../drawing/model.ts';
 import { buildRuns, segmentsOf } from '../drawing/runs.ts';
 import {
+  codeOf,
   type GroupedRun,
   type SizedRun,
+  type SizeLabel,
   sizeLabels,
   sizeRuns,
 } from '../drawing/sizes.ts';
@@ -25,10 +27,13 @@ import {
   clipStrokes,
   inArea,
   type LayerPick,
+  LETTER_GAPS,
+  linetypeLetters,
   list,
   openSheet,
   paperMm,
   pickLayer,
+  pickLayers,
   positiveInt,
   positiveNumber,
   round,
@@ -67,13 +72,7 @@ function groupsOf(input: CommandInput, sheet: Sheet): Group[] {
       throw usage(
         'A group name is 1 to 60 characters, without = or control characters. Use a short name such as sewer.',
       );
-    add(
-      name,
-      spec
-        .slice(eq + 1)
-        .split('+')
-        .map((part) => pickLayer(sheet, part)),
-    );
+    add(name, pickLayers(sheet, spec.slice(eq + 1)));
   }
   for (const spec of list(input.values, 'layer')) {
     const pick = pickLayer(sheet, spec);
@@ -106,11 +105,14 @@ type NamedRun = GroupedRun & { layer: string };
 function runsOf(sheet: Sheet, groups: Group[], settings: Settings): NamedRun[] {
   const out: NamedRun[] = [];
   const min = paperMm(settings.minMm);
+  const letters = linetypeLetters(sheet);
   groups.forEach((group, index) => {
     for (const pick of group.picks) {
       const strokes = clipStrokes(strokesOf(sheet, pick), settings.area);
       for (const run of buildRuns(segmentsOf(strokes), {
         gap: paperMm(settings.gapMm),
+        letters,
+        letterGap: paperMm(settings.gapMm * LETTER_GAPS),
       }))
         if (run.length >= min)
           out.push({ ...run, group: index, layer: pick.name });
@@ -130,7 +132,7 @@ function areaText(area: Area): string {
 }
 
 const settingsLine = (s: Settings, extra = ''): string =>
-  `pieces up to ${s.gapMm} mm apart on paper are joined; runs under ${s.minMm} mm on paper are left out${extra}; ${areaText(s.area)}`;
+  `pieces up to ${s.gapMm} mm apart on paper are joined, and up to ${s.gapMm * LETTER_GAPS} mm where a linetype letter sits in the break; runs under ${s.minMm} mm on paper are left out${extra}; ${areaText(s.area)}`;
 
 const point = (x: number, y: number): string =>
   `${Math.round(x)},${Math.round(y)}`;
@@ -201,12 +203,25 @@ export function measure(input: CommandInput): string {
       inArea(settings.area, (l.x0 + l.x1) / 2, (l.y0 + l.y1) / 2),
     ),
   ).filter((l) => plain || l.onRun);
-  const placed = { count: 0 };
-  const sized = sizeRuns(found, labels, { reach: paperMm(reachMm) }, placed);
+  // A group named by the code its labels carry (F, CW, HF) takes only those
+  // labels, and gives them to no other group.
+  const labelCodes = new Set(labels.map((l) => l.code));
+  const codes = groups.map((g) => {
+    const code = codeOf(g.name);
+    return code !== null && labelCodes.has(code) ? code : null;
+  });
+  const boundCodes = codes.filter((c): c is string => c !== null);
+  const placed = { count: 0, missed: [] as SizeLabel[] };
+  const sized = sizeRuns(
+    found,
+    labels,
+    { reach: paperMm(reachMm), codes },
+    placed,
+  );
   const labelsLine = `${placed.count} of ${labels.length} size labels in the area sit on a measured run${labels.length > placed.count ? '; the others belong to pipe that is not in these groups, or fit no run' : ''}`;
   const settingsText = settingsLine(
     settings,
-    `; a size label counts within ${reachMm} mm of its run${plain ? ', plain sizes included' : ''}`,
+    `; a size label counts within ${reachMm} mm of its run${plain ? ', plain sizes included' : ''}${boundCodes.length ? `; labels coded ${boundCodes.join(', ')} go only to the groups of those names` : ''}`,
   );
   const m = (pt: number) => pt / scale.ptPerM;
 
@@ -218,10 +233,10 @@ export function measure(input: CommandInput): string {
       .reduce((s, r) => s + r.length, 0);
     return {
       group: group.name,
-      length_m: round(m(length), 1),
+      length_m: round(m(length), 3),
       runs: mine.length,
-      sized_m: round(m(length - unsized), 1),
-      unsized_m: round(m(unsized), 1),
+      sized_m: round(m(length - unsized), 3),
+      unsized_m: round(m(unsized), 3),
     };
   });
   const bySize = new Map<
@@ -258,11 +273,72 @@ export function measure(input: CommandInput): string {
     .map((e) => ({
       group: (groups[e.group] as Group).name,
       size: e.size ?? 'unsized',
-      length_m: round(m(e.length), 1),
-      labelled_m: e.size === null ? null : round(m(e.labelled), 1),
+      length_m: round(m(e.length), 3),
+      labelled_m: e.size === null ? null : round(m(e.labelled), 3),
       runs: e.runs,
     }));
+  // Which label sized what, so a wrong pairing can be seen.
+  const byLabel = new Map<
+    string,
+    { group: number; size: string; label: string; length: number; runs: number }
+  >();
+  for (const run of sized) {
+    if (run.basis !== 'label' || !run.size || !run.label) continue;
+    const key = `${run.group}|${run.size}|${run.label}`;
+    const e = byLabel.get(key) ?? {
+      group: run.group,
+      size: run.size,
+      label: run.label,
+      length: 0,
+      runs: 0,
+    };
+    e.length += run.length;
+    e.runs++;
+    byLabel.set(key, e);
+  }
+  const labelRows: Row[] = [...byLabel.values()]
+    .sort((a, b) => a.group - b.group || b.length - a.length)
+    .map((e) => ({
+      group: (groups[e.group] as Group).name,
+      size: e.size,
+      label: e.label,
+      labelled_m: round(m(e.length), 3),
+      runs: e.runs,
+    }));
+  // Labels with a group's code that sit on no run: the sheet names a size
+  // for the system there, and does not say which pipe.
+  const apart = new Map<
+    string,
+    { group: number; size: string; label: string; labels: number }
+  >();
+  for (const label of placed.missed) {
+    const group = label.code === null ? -1 : codes.indexOf(label.code);
+    if (group < 0) continue;
+    const key = `${group}|${label.size}`;
+    const e = apart.get(key);
+    if (e) e.labels++;
+    else
+      apart.set(key, { group, size: label.size, label: label.text, labels: 1 });
+  }
+  const apartRows: Row[] = [...apart.values()]
+    .sort((a, b) => a.group - b.group || b.labels - a.labels)
+    .map((e) => ({
+      group: (groups[e.group] as Group).name,
+      size: e.size,
+      label: e.label,
+      labels: e.labels,
+    }));
   const total = sized.reduce((s, r) => s + r.length, 0);
+  // The saved copy keeps a thousandth of a metre; the screen rounds to a tenth.
+  const screen = (rows: Row[]): Row[] =>
+    rows.map((r) =>
+      Object.fromEntries(
+        Object.entries(r).map(([k, v]) => [
+          k,
+          typeof v === 'number' && k.endsWith('_m') ? round(v, 1) : v,
+        ]),
+      ),
+    );
   const saved = save(input.io, str(input.values, 'save'), {
     file: name,
     page: sheet.page,
@@ -284,11 +360,14 @@ export function measure(input: CommandInput): string {
     },
     groups: groupRows,
     sizes: sizeRows,
+    labels: labelRows,
+    labels_apart: apartRows,
     runs: sized.map((r: SizedRun & { layer?: string }) => ({
       group: (groups[r.group] as Group).name,
       layer: r.layer,
       size: r.size,
       basis: r.basis,
+      label: r.label,
       length_m: round(m(r.length), 3),
       from: [round(r.x0, 1), round(r.y0, 1)],
       to: [round(r.x1, 1), round(r.y1, 1)],
@@ -324,16 +403,46 @@ export function measure(input: CommandInput): string {
           settings: settingsText,
           size_labels: labelsLine,
           ...(saved ? { saved } : {}),
-          groups: groupRows.map((r) =>
+          groups: screen(groupRows).map((r) =>
             tableRow(
               r,
               ['group', 'length_m', 'runs', 'sized_m', 'unsized_m'],
               fieldLimit,
             ),
           ),
-          sizes: sizeRows
+          sizes: screen(sizeRows)
             .slice(0, Math.min(shown, cap))
             .map((r) => tableRow(r, columns, fieldLimit)),
+          // Which label sized what: a label of another system here is a
+          // wrong pairing to check.
+          ...(labelRows.length
+            ? {
+                sized_by: screen(labelRows)
+                  .slice(0, 12)
+                  .map((r) =>
+                    tableRow(
+                      r,
+                      ['group', 'size', 'label', 'labelled_m', 'runs'],
+                      fieldLimit,
+                    ),
+                  ),
+              }
+            : {}),
+          // A size the sheet names for a system, away from any pipe: it is
+          // for the owner to confirm, not a measured size.
+          ...(apartRows.length
+            ? {
+                labels_apart: apartRows
+                  .slice(0, 12)
+                  .map((r) =>
+                    tableRow(
+                      r,
+                      ['group', 'size', 'label', 'labels'],
+                      fieldLimit,
+                    ),
+                  ),
+              }
+            : {}),
         };
         return render(doc, help);
       },

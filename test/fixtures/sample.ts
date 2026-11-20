@@ -224,6 +224,43 @@ export function sampleDrawing(options: PdfOptions = {}): Buffer {
   return buildPdf(samplePages(), { hidden: ['OLD'], ...options });
 }
 
+/** One metre at a true 1:100, in points. */
+const TRUE_M = (72 / 25.4) * 10;
+
+/**
+ * A second small sheet for the odd cases: a line broken wide for its linetype
+ * letters, a layer whose name holds a plus sign, and a tag whose size is font
+ * text. It states its scale in font text and has no scale bar.
+ */
+export function oddDrawing(): Buffer {
+  const c = new Content();
+  const comments: Comment[] = [];
+  // A hydrant line of 14 m: pieces of 80 points, breaks of 34 points (12 mm),
+  // each with the letters HF in it.
+  c.layer('HYDRANT').pen(COLORS.fire, 0.6);
+  const end = 100 + 14 * TRUE_M;
+  for (let x = 100; x < end; x += 114) {
+    c.line(x, 300, Math.min(end, x + 80), 300);
+    if (x + 114 < end) c.text('HF', x + 91, 304, 8);
+  }
+  c.end();
+  c.layer('A+B')
+    .pen(COLORS.water, 1.5)
+    .line(100, 400, 100 + 5 * TRUE_M, 400)
+    .end();
+  c.layer('C')
+    .pen(COLORS.rain, 1.5)
+    .line(100, 450, 100 + 3 * TRUE_M, 450)
+    .end();
+  // A coded size label that sits apart from its line, as one on a leader does.
+  comments.push({ text: 'HF-%%C4"', x0: 275, y0: 234, x1: 325, y1: 246 });
+  // A tag: a stroke-font identifier with its size in font text under it.
+  comments.push({ text: 'R1', x0: 589, y0: 194, x1: 611, y1: 206 });
+  c.text('4"', 594, 219, 10);
+  c.text('SCALE 1:100', 500, 80, 10);
+  return buildPdf([{ width: 800, height: 600, content: c, comments }]);
+}
+
 /** A page that is one picture and nothing else, as a scan is. */
 export function scanLike(): Buffer {
   const c = new Content();

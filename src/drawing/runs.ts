@@ -27,10 +27,22 @@ export interface RunOptions {
   offset?: number;
   /** Pieces may differ in direction by this many degrees. */
   angle?: number;
+  /**
+   * Where linetype letters sit. A line is broken wider for a letter than for
+   * a dash, so a break with a letter in it is joined up to `letterGap`.
+   */
+  letters?: ReadonlyArray<{ x: number; y: number }>;
+  /** The widest break a letter may bridge, in points. */
+  letterGap?: number;
+  /** A letter may sit this far off the line, in points. */
+  letterOffset?: number;
 }
 
 /** Pieces at most this long, in points, are dots: they are not joined. */
 const MIN_PIECE = 0.3;
+
+/** The most line ends and pairs looked at when joining across letters. */
+const LETTER_WORK = 20_000_000;
 
 /** Split strokes into single segments, dropping dots and exact repeats. */
 export function segmentsOf(strokes: Iterable<Stroke>): Float64Array {
@@ -141,6 +153,89 @@ export function buildRuns(segs: Float64Array, options: RunOptions): Run[] {
             const rj = find(j);
             if (ri !== rj) parent[ri] = rj;
           }
+        }
+      }
+    }
+  }
+  // A break with a linetype letter in it: join the two pieces that face each
+  // other across the letter, on one line, at most `letterGap` apart.
+  const letterGap = options.letterGap ?? 0;
+  if (options.letters?.length && letterGap > gap) {
+    const letterOffset = options.letterOffset ?? 6;
+    const wide = new Map<number, number[]>();
+    for (let i = 0; i < n; i++) {
+      for (let e = 0; e < 2; e++) {
+        const k = keyOf(
+          Math.floor((segs[i * 4 + e * 2] as number) / letterGap),
+          Math.floor((segs[i * 4 + e * 2 + 1] as number) / letterGap),
+        );
+        const list = wide.get(k);
+        if (list) list.push(i * 2 + e);
+        else wide.set(k, [i * 2 + e]);
+      }
+    }
+    // Bounded work: a hostile file may pile every line end on one letter.
+    let budget = LETTER_WORK;
+    for (const letter of options.letters) {
+      if (budget <= 0) break;
+      // The ends that face the letter: the piece stops short of it, and its
+      // line passes through it.
+      const facing: number[] = [];
+      const cx = Math.floor(letter.x / letterGap);
+      const cy = Math.floor(letter.y / letterGap);
+      for (let gx = cx - 1; gx <= cx + 1; gx++) {
+        for (let gy = cy - 1; gy <= cy + 1; gy++) {
+          for (const packed of wide.get(keyOf(gx, gy)) ?? []) {
+            budget--;
+            const i = packed >> 1;
+            const e = packed & 1;
+            const li = lengths[i] as number;
+            if (li <= MIN_PIECE) continue;
+            const ax = segs[i * 4 + e * 2] as number;
+            const ay = segs[i * 4 + e * 2 + 1] as number;
+            const ux = (ax - (segs[i * 4 + (1 - e) * 2] as number)) / li;
+            const uy = (ay - (segs[i * 4 + (1 - e) * 2 + 1] as number)) / li;
+            const t = (letter.x - ax) * ux + (letter.y - ay) * uy;
+            if (t <= 0 || t >= letterGap) continue;
+            const off = Math.abs((letter.x - ax) * uy - (letter.y - ay) * ux);
+            if (off <= letterOffset) facing.push(packed);
+          }
+        }
+      }
+      budget -= facing.length * facing.length;
+      for (let a = 0; a < facing.length; a++) {
+        const i = (facing[a] as number) >> 1;
+        const ei = (facing[a] as number) & 1;
+        const li = lengths[i] as number;
+        const ax = segs[i * 4 + ei * 2] as number;
+        const ay = segs[i * 4 + ei * 2 + 1] as number;
+        // The first piece's direction, towards the break.
+        const ux = (ax - (segs[i * 4 + (1 - ei) * 2] as number)) / li;
+        const uy = (ay - (segs[i * 4 + (1 - ei) * 2 + 1] as number)) / li;
+        for (let b = a + 1; b < facing.length; b++) {
+          const j = (facing[b] as number) >> 1;
+          if (i === j || find(i) === find(j)) continue;
+          const ej = (facing[b] as number) & 1;
+          const lj = lengths[j] as number;
+          const bx = segs[j * 4 + ej * 2] as number;
+          const by = segs[j * 4 + ej * 2 + 1] as number;
+          const farBx = segs[j * 4 + (1 - ej) * 2] as number;
+          const farBy = segs[j * 4 + (1 - ej) * 2 + 1] as number;
+          // The second piece carries on along the same line, away from the
+          // break: the same direction, and both its ends on the first
+          // piece's line. Two pipes side by side are not one pipe.
+          const vx = (farBx - bx) / lj;
+          const vy = (farBy - by) / lj;
+          if (ux * vx + uy * vy <= 0) continue;
+          if (Math.abs(ux * vy - uy * vx) > sinMax) continue;
+          if (
+            Math.abs((bx - ax) * uy - (by - ay) * ux) > offset ||
+            Math.abs((farBx - ax) * uy - (farBy - ay) * ux) > offset
+          )
+            continue;
+          const span = (bx - ax) * ux + (by - ay) * uy;
+          if (span <= 0 || span > letterGap) continue;
+          parent[find(i)] = find(j);
         }
       }
     }

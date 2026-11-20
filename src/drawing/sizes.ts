@@ -13,6 +13,10 @@ import { drawnWithin, type Run, runsTouch } from './runs.ts';
 export interface SizeLabel {
   /** Normalised: Ø110, 3", DN100. */
   size: string;
+  /** The label as written. */
+  text: string;
+  /** The system code it starts with, letters only: F, CW, HF. Null without one. */
+  code: string | null;
   /** Written as a run label: it carries a slope or a system prefix. */
   onRun: boolean;
   x0: number;
@@ -29,6 +33,12 @@ const INCH = /(?:\u00d8\s*)?(\d{1,2}(?:\.\d+)?(?:\s*\d\/\d)?|\d\/\d)\s*"/;
 const DN = /\bDN\s*(\d{2,4})\b/i;
 const SLOPE = /\d\s*-\s*\d+(?:\.\d+)?\s*%|\d\s*%/;
 const PREFIX = /^[A-Za-z][A-Za-z0-9.]{0,5}\s*-/;
+
+/** A system code reduced to its letters: "C.W.2-" and "CW1" are both CW. */
+export function codeOf(text: string): string | null {
+  const letters = text.replace(/[^A-Za-z]/g, '').toUpperCase();
+  return letters || null;
+}
 
 /** The pipe size a label states, or null. */
 export function sizeOf(text: string): string | null {
@@ -50,9 +60,12 @@ export function sizeLabels(labels: readonly Label[]): SizeLabel[] {
     if ((label.text.match(/\u00d8/g)?.length ?? 0) > 1) continue;
     const size = sizeOf(label.text);
     if (!size) continue;
+    const prefix = PREFIX.exec(label.text.trim());
     out.push({
       size,
-      onRun: SLOPE.test(label.text) || PREFIX.test(label.text.trim()),
+      text: label.text.trim(),
+      code: prefix ? codeOf(prefix[0]) : null,
+      onRun: SLOPE.test(label.text) || prefix !== null,
       x0: label.x0,
       y0: label.y0,
       x1: label.x1,
@@ -73,6 +86,8 @@ export interface SizedRun extends GroupedRun {
   size: string | null;
   /** label: a label is written along it; neighbour: taken from touching runs. */
   basis: 'label' | 'neighbour' | 'none';
+  /** The label that sized it, as written. Null unless the basis is a label. */
+  label: string | null;
 }
 
 export interface SizeOptions {
@@ -80,11 +95,19 @@ export interface SizeOptions {
   reach: number;
   /** Runs within this distance touch, in points. */
   touch?: number;
+  /**
+   * Each group's system code, by group number; null for a group with none. A
+   * label with a code sizes only runs of the group with that code, and never
+   * a run of a group with another code.
+   */
+  codes?: ReadonlyArray<string | null>;
 }
 
 interface Vote {
   count: number;
   score: number;
+  /** The best-fitting label of this size, as written. */
+  label: string;
 }
 
 export function sizeRuns(
@@ -92,13 +115,16 @@ export function sizeRuns(
   labels: readonly SizeLabel[],
   options: SizeOptions,
   /** Set to how many labels found a run to size. */
-  placed?: { count: number },
+  placed?: { count: number; missed?: SizeLabel[] },
 ): SizedRun[] {
   const out: SizedRun[] = runs.map((r) => ({
     ...r,
     size: null,
     basis: 'none',
+    label: null,
   }));
+  const codes = options.codes ?? [];
+  const bound = new Set(codes.filter((c): c is string => c !== null));
   // Runs in a grid, so each label looks only at those near it. A label names
   // one pipe, so it gives its size to the one run that fits it best.
   const cell = 48;
@@ -133,6 +159,13 @@ export function sizeRuns(
         for (const index of grid.get(keyOf(gx + dx, gy + dy)) ?? []) {
           if (tried.has(index)) continue;
           tried.add(index);
+          const groupCode = codes[(out[index] as SizedRun).group] ?? null;
+          if (label.code !== null) {
+            // A coded label belongs to the group of that code, when there is
+            // one, and never to a group of another code.
+            if (bound.has(label.code) && groupCode !== label.code) continue;
+            if (groupCode !== null && groupCode !== label.code) continue;
+          }
           const score = fit(label, cx, cy, out[index] as SizedRun, options);
           if (score < bestScore) {
             best = index;
@@ -141,18 +174,25 @@ export function sizeRuns(
         }
       }
     }
-    if (best < 0) continue;
+    if (best < 0) {
+      placed?.missed?.push(label);
+      continue;
+    }
     if (placed) placed.count++;
     const tally = votes[best] as Map<string, Vote>;
     const entry = tally.get(label.size);
     if (entry) {
       entry.count++;
-      entry.score = Math.min(entry.score, bestScore);
-    } else tally.set(label.size, { count: 1, score: bestScore });
+      if (bestScore < entry.score) {
+        entry.score = bestScore;
+        entry.label = label.text;
+      }
+    } else
+      tally.set(label.size, { count: 1, score: bestScore, label: label.text });
   }
   out.forEach((run, index) => {
     let chosen: string | null = null;
-    let top: Vote = { count: 0, score: Infinity };
+    let top: Vote = { count: 0, score: Infinity, label: '' };
     for (const [size, entry] of votes[index] as Map<string, Vote>) {
       if (
         entry.count > top.count ||
@@ -165,6 +205,7 @@ export function sizeRuns(
     if (chosen) {
       run.size = chosen;
       run.basis = 'label';
+      run.label = top.label;
     }
   });
 

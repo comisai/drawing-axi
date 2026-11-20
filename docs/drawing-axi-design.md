@@ -184,6 +184,8 @@ On a sheet with stroke-font labels, font text is hidden by default and counted i
 
 Segments on the chosen layers are joined when their ends are within `--gap` (8 mm on paper), their directions differ by under 4 degrees, and the shorter lies within 0.8 points of the longer's line. A run is measured end to end, so gaps and overlaps are not counted twice. Segments under 0.3 points are dots and are dropped: a dot at a corner would join two runs into one and lose the shorter. Exact repeats are dropped. Runs under `--min` (6 mm on paper) are left out: they are arrowheads and parts of symbols.
 
+A line with a lettered linetype is broken wider for each letter than for a dash: 11.6 mm on a real hydrant line, against the 8 mm gap. Raising the gap for every line would join pipes that only pass near each other. So a break is joined up to twice the gap only when a label of one to three Latin letters sits in it, on the line, and the two pieces are on one line.
+
 Not measured: curved pipe, and the part of a line that ends inside a gap of its own dash pattern (under one gap per run).
 
 ### 7.5 Sizes
@@ -199,11 +201,17 @@ A run takes the size most of its labels state. A run with none takes the size of
 
 Measure every system in one command. Labels then go to the right system's run and not to a neighbour's. `measure` prints how many size labels found a run.
 
+**System codes.** A prefix is the system's code: `F`, `CW1`, `C.W.2`, `H.F.`, reduced to its letters. Pipes of two systems often run side by side, and a label beside one is also near the other. When a group is named by a code that the sheet's labels carry, a label with that code sizes only that group, and that group takes no label with another code. A label with no code, such as `Ø160-1%`, goes to the run it fits best, as before.
+
+**Evidence.** `measure` prints `sized_by`: for each group and size, the label text that sized it and how many metres. The saved runs carry the label too. A wrong pairing is then visible instead of hidden in a total.
+
+**Labels apart.** On real sheets many coded labels are not beside their pipe: they sit 5 to 28 mm away, on a leader or in a stack beside a bundle of pipes. Which pipe each one means cannot be read from position alone, so they size nothing. `measure` lists them as `labels_apart` for the group of their code: the size the sheet states for that system, for a person to confirm.
+
 ### 7.6 Tags, symbols, legend, picture
 
-- **`tags`** pairs a short identifier with a size written within about a text line above or below it (F14), and counts by series and size.
-- **`symbols`** groups strokes and fills that are within `--join` (1.5 mm on paper) of each other, leaves out pieces over `--max-piece` (30 mm), and counts groups of the same size and number of parts. It does not know what a symbol means; `render` shows one.
-- **`legend`** pairs each caption with a short horizontal line on its row (F13). Layers that hold mostly lettering are left out. Without `--region` it takes the column of samples drawn in the most different layers, which a table of notes is not. It prints the box round the captions and samples, which a takeoff passes to `--exclude`.
+- **`tags`** pairs a short identifier with a size written within about a text line above or below it (F14), and counts by series and size. It reads stroke-font and font text together, since a size may be in either, and the saved file holds every tag's place.
+- **`symbols`** groups strokes and fills of one layer that are within `--join` (1.5 mm on paper) of each other, leaves out pieces over `--max-piece` (30 mm), and counts groups of the same size and number of parts. Layers are grouped one at a time, and the saved file holds every symbol's place. It does not know what a symbol means; `render` shows one.
+- **`legend`** pairs each caption with a short horizontal line on its row (F13). Layers that hold mostly lettering are left out. Without `--region` it takes the column of samples drawn in the most different layers, which a table of notes is not. The samples of a legend start together and are one length; a line of the background that crosses a caption's row is neither, and is left out. It prints the box round the captions and samples, which a takeoff passes to `--exclude`.
 - **`render`** writes SVG: chosen layers in their colours, with labels and a coordinate grid if asked. Text from the file is escaped. An agent turns it into an image (`resvg` in Comis) and looks.
 
 ### 7.7 Errors and limits

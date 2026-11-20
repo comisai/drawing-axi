@@ -104,6 +104,10 @@ export const COMMANDS: readonly CommandSpec[] = [
         type: 'boolean',
         summary: 'One row per colour of each layer',
       },
+      own: {
+        type: 'boolean',
+        summary: 'Leave out layers of referenced files, whose names hold a bar',
+      },
       gap: GAP,
       min: MIN,
       ...AREA_FLAGS,

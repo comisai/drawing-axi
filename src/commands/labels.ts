@@ -39,7 +39,11 @@ function matcher(
   return (text) => re.test(text);
 }
 
-function pickLabels(input: CommandInput, labels: readonly Label[]) {
+function pickLabels(
+  input: CommandInput,
+  labels: readonly Label[],
+  everySource = false,
+) {
   const sourceFlag = str(input.values, 'source');
   if (
     sourceFlag !== undefined &&
@@ -50,8 +54,14 @@ function pickLabels(input: CommandInput, labels: readonly Label[]) {
   const counts = { shx: 0, text: 0, note: 0 };
   for (const l of labels) counts[l.source]++;
   // A CAD plot's own labels are its stroke-font text; font text on such a
-  // sheet is mostly the background plan, so it is shown only when asked for.
-  const auto = counts.shx + counts.note >= 20 ? ['shx', 'note'] : [...SOURCES];
+  // sheet is mostly the background plan, so a plain listing leaves it out.
+  // A search, a size count and the tags look everywhere: a real label may be
+  // in either.
+  const searching = everySource || str(input.values, 'match') !== undefined;
+  const auto =
+    !searching && counts.shx + counts.note >= 20
+      ? ['shx', 'note']
+      : [...SOURCES];
   const sources = new Set<string>(
     sourceFlag === undefined
       ? auto
@@ -84,19 +94,37 @@ export function labels(input: CommandInput): string {
   const { sheet, name } = openSheet(input);
   const limit = positiveInt(input.values, 'limit', 20);
   const full = input.values.full === true;
-  const { picked, filtered, hiddenNote } = pickLabels(input, sheet.labels);
+  const { picked, filtered, hiddenNote } = pickLabels(
+    input,
+    sheet.labels,
+    input.values.sizes === true,
+  );
   const head: Row = { file: name, also: hiddenNote };
   if (input.values.sizes === true) {
-    const bySize = new Map<string, { labels: number; along: number }>();
+    // One row per way a size is written: with a system code, with a slope,
+    // or alone. A size written alone belongs to a tag.
+    const kinds = new Map<
+      string,
+      { code: string; size: string; slope: string; labels: number }
+    >();
     for (const s of sizeLabels(picked)) {
-      const e = bySize.get(s.size) ?? { labels: 0, along: 0 };
+      const slope = /-\s*(\d+(?:\.\d+)?)\s*%/.exec(s.text)?.[1];
+      const key = `${s.code ?? ''}|${s.size}|${slope ?? ''}`;
+      const e = kinds.get(key) ?? {
+        code: s.code ?? '-',
+        size: s.size,
+        slope: slope ? `${slope}%` : '-',
+        labels: 0,
+      };
       e.labels++;
-      if (s.onRun) e.along++;
-      bySize.set(s.size, e);
+      kinds.set(key, e);
     }
-    const rows: Row[] = [...bySize]
-      .map(([size, e]) => ({ size, labels: e.labels, along_runs: e.along }))
-      .sort((a, b) => b.labels - a.labels || a.size.localeCompare(b.size));
+    const rows: Row[] = [...kinds.values()].sort(
+      (a, b) =>
+        b.labels - a.labels ||
+        a.size.localeCompare(b.size) ||
+        a.code.localeCompare(b.code),
+    );
     const saved = save(input.io, str(input.values, 'save'), {
       file: name,
       sizes: rows,
@@ -104,14 +132,14 @@ export function labels(input: CommandInput): string {
     return listOutput({
       key: 'sizes',
       summary: rows.length
-        ? `${plural(rows.length, 'pipe size')} named by ${plural(
+        ? `${plural(rows.length, 'way')} a pipe size is written, in ${plural(
             rows.reduce((s, r) => s + (r.labels as number), 0),
             'label',
           )}`
         : '0 labels name a pipe size',
       head: { ...head, saved },
       rows: full ? rows : rows.slice(0, limit),
-      columns: ['size', 'labels', 'along_runs'],
+      columns: ['code', 'size', 'slope', 'labels'],
       full,
       narrower: 'drawing-axi labels <file.pdf> --sizes --region <x0,y0,x1,y1>',
       help: rows.length
@@ -203,8 +231,15 @@ export function tags(input: CommandInput): string {
   const { sheet, name } = openSheet(input);
   const limit = positiveInt(input.values, 'limit', 20);
   const full = input.values.full === true;
-  const { picked } = pickLabels(input, sheet.labels);
+  const { picked } = pickLabels(input, sheet.labels, true);
   const found = findTags(picked);
+  const places = found.map((t) => ({
+    tag: t.id,
+    series: t.series,
+    size: t.size,
+    x: Math.round(t.x),
+    y: Math.round(t.y),
+  }));
   const help = found.length
     ? [
         'Run `drawing-axi tags <file.pdf> --each` for where each tag is',
@@ -224,7 +259,7 @@ export function tags(input: CommandInput): string {
       .sort((a, b) => a.tag.localeCompare(b.tag, undefined, { numeric: true }));
     const saved = save(input.io, str(input.values, 'save'), {
       file: name,
-      tags: rows,
+      tags: places,
     });
     const shown = full ? rows : rows.slice(0, limit);
     return listOutput({
@@ -266,6 +301,7 @@ export function tags(input: CommandInput): string {
   const saved = save(input.io, str(input.values, 'save'), {
     file: name,
     tags: rows,
+    places,
   });
   const shown = full ? rows : rows.slice(0, limit);
   return listOutput({

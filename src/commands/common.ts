@@ -429,6 +429,45 @@ export function pickLayer(sheet: Sheet, spec: string): LayerPick {
   };
 }
 
+/**
+ * `LAYER+LAYER`: layers joined by `+`. A layer's own name may hold a `+`, so
+ * the longest run of parts that names a layer is taken first.
+ */
+export function pickLayers(sheet: Sheet, spec: string): LayerPick[] {
+  const parts = spec.split('+');
+  const picks: LayerPick[] = [];
+  for (let at = 0; at < parts.length; ) {
+    let taken = 0;
+    for (let end = parts.length; end > at + 1 && !taken; end--) {
+      const joined = parts.slice(at, end).join('+');
+      const name = joined.replace(/@#?[0-9a-fA-F]{3,6}$/, '').trim();
+      if (sheet.layers.some((l) => l.name === name)) {
+        picks.push(pickLayer(sheet, joined));
+        taken = end - at;
+      }
+    }
+    if (!taken) {
+      picks.push(pickLayer(sheet, parts[at] as string));
+      taken = 1;
+    }
+    at += taken;
+  }
+  return picks;
+}
+
+/**
+ * Where linetype letters sit: a label of one to three Latin letters, such as
+ * the F of a fire line. A line is broken for each, wider than for a dash.
+ */
+export function linetypeLetters(sheet: Sheet): Array<{ x: number; y: number }> {
+  return sheet.labels
+    .filter((l) => /^[A-Za-z]{1,3}$/.test(l.text.trim()))
+    .map((l) => ({ x: (l.x0 + l.x1) / 2, y: (l.y0 + l.y1) / 2 }));
+}
+
+/** A break with a linetype letter in it is joined up to this many gaps wide. */
+export const LETTER_GAPS = 2;
+
 export function strokesOf(sheet: Sheet, pick: LayerPick): Stroke[] {
   return sheet.strokes.filter(
     (s) =>

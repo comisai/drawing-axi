@@ -151,6 +151,7 @@ export function readLegend(
       /** The layers and colours its samples are drawn in. */
       kinds: Set<string>;
       x0: number;
+      length: number;
     }
     const columns = new Map<string, Column>();
     for (const { label, sample } of pairs) {
@@ -164,6 +165,7 @@ export function readLegend(
           labels: new Set([label]),
           kinds: new Set([kind]),
           x0: sample.x0,
+          length: sample.x1 - sample.x0,
         });
     }
     // A legend shows many systems, so its samples differ; a table of notes
@@ -184,10 +186,14 @@ export function readLegend(
       top = Math.min(top, label.y0);
       bottom = Math.max(bottom, label.y1);
     }
+    // A legend's own samples start together and are one length. A line of
+    // the background plan that happens to cross a caption's row is neither.
     const x0 = best.x0;
+    const length = best.length;
     kept = pairs.filter(
       ({ label, sample }) =>
-        Math.abs(sample.x0 - x0) <= 40 &&
+        Math.abs(sample.x0 - x0) <= 6 &&
+        Math.abs(sample.x1 - sample.x0 - length) <= Math.max(4, length * 0.1) &&
         label.y1 >= top - 60 &&
         label.y0 <= bottom + 60,
     );

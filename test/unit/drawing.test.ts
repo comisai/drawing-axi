@@ -20,6 +20,7 @@ import {
 } from '../../src/drawing/scale.ts';
 import {
   type GroupedRun,
+  type SizeLabel,
   sizeLabels,
   sizeOf,
   sizeRuns,
@@ -214,6 +215,89 @@ describe('runs', () => {
     assert.equal(runs.length, 3);
   });
 
+  it('joins across a wider break only where a linetype letter sits in it', () => {
+    const pieces = segmentsOf([
+      stroke([0, 0, 100, 0]),
+      stroke([140, 0, 240, 0]),
+      stroke([280, 0, 380, 0]),
+    ]);
+    // Breaks of 40 points are wider than the gap of 25.
+    assert.equal(buildRuns(pieces, { gap: 25 }).length, 3);
+    const lettered = buildRuns(pieces, {
+      gap: 25,
+      letterGap: 50,
+      letters: [
+        { x: 120, y: 1 },
+        { x: 260, y: -2 },
+      ],
+    });
+    assert.deepEqual(
+      lettered.map((r) => Math.round(r.length)),
+      [380],
+    );
+    // A letter beside the line, or beyond the break, joins nothing.
+    assert.equal(
+      buildRuns(pieces, {
+        gap: 25,
+        letterGap: 50,
+        letters: [
+          { x: 120, y: 30 },
+          { x: 50, y: 0 },
+        ],
+      }).length,
+      3,
+    );
+    // A break wider than the letter gap stays a break.
+    assert.equal(
+      buildRuns(pieces, { gap: 25, letterGap: 35, letters: [{ x: 120, y: 0 }] })
+        .length,
+      3,
+    );
+    // Two pipes side by side with a letter between their staggered ends
+    // stay two pipes.
+    const sideBySide = buildRuns(
+      segmentsOf([stroke([0, 0, 100, 0]), stroke([130, 5, 300, 5])]),
+      { gap: 10, letterGap: 60, letters: [{ x: 115, y: 2 }] },
+    );
+    assert.deepEqual(
+      sideBySide.map((r) => Math.round(r.length)).sort((a, b) => a - b),
+      [100, 170],
+    );
+    // A letter where two lines meet at a corner joins nothing.
+    assert.equal(
+      buildRuns(
+        segmentsOf([stroke([0, 0, 100, 0]), stroke([120, 20, 120, 120])]),
+        { gap: 5, letterGap: 60, letters: [{ x: 110, y: 5 }] },
+      ).length,
+      2,
+    );
+  });
+
+  it('stays quick when every line end is piled on the letters', () => {
+    // 6,000 spokes that all stop short of one point, and a letter on it.
+    const spokes = [];
+    for (let k = 0; k < 6000; k++) {
+      const angle = (k / 6000) * Math.PI * 2;
+      spokes.push(
+        stroke([
+          500 + Math.cos(angle) * 10,
+          500 + Math.sin(angle) * 10,
+          500 + Math.cos(angle) * 200,
+          500 + Math.sin(angle) * 200,
+        ]),
+      );
+    }
+    const started = performance.now();
+    const runs = buildRuns(segmentsOf(spokes), {
+      gap: 5,
+      letterGap: 60,
+      letters: Array.from({ length: 4000 }, () => ({ x: 500, y: 500 })),
+    });
+    // Without a bound this is 36 million pairs for each of 4,000 letters.
+    assert.ok(performance.now() - started < 3000);
+    assert.ok(runs.length >= 1);
+  });
+
   it('knows where a run carries ink', () => {
     const [only] = buildRuns(
       segmentsOf([stroke([0, 0, 40, 0]), stroke([60, 0, 100, 0])]),
@@ -336,6 +420,63 @@ describe('sizes', () => {
       { reach: 4 },
     );
     assert.equal(alone[0]?.size, null);
+  });
+
+  it('keeps a label with a system code for the group that carries that code', () => {
+    const fire = run(0, 100, 300, 100, 0);
+    const water = run(0, 300, 300, 300, 1);
+    const beside = (text: string, y: number) =>
+      label(text, 100, y - 12, 146, y + 1);
+    const sized = (codes: Array<string | null>, ...labels: Label[]) =>
+      sizeRuns([fire, water], sizeLabels(labels), { reach: 4, codes }).map(
+        (r) => r.size,
+      );
+    // With no codes, a water label beside the fire run sizes it.
+    assert.deepEqual(sized([null, null], beside('CW1-Ø3"', 100)), ['3"', null]);
+    // Named by their codes, each group takes only its own labels.
+    assert.deepEqual(sized(['F', 'CW'], beside('CW1-Ø3"', 100)), [null, null]);
+    assert.deepEqual(sized(['F', 'CW'], beside('C.W.2- 3"', 300)), [
+      null,
+      '3"',
+    ]);
+    assert.deepEqual(sized(['F', 'CW'], beside('F-Ø4"', 100)), ['4"', null]);
+    // Another code is another system, even with no group of its own.
+    assert.deepEqual(sized(['F', 'CW'], beside('H.F.-Ø4"', 100)), [null, null]);
+    // A label with a slope and no code goes to whichever run it is beside.
+    assert.deepEqual(sized(['F', 'CW'], beside('Ø160-1%', 300)), [
+      null,
+      'Ø160',
+    ]);
+  });
+
+  it('lists the labels that found no run', () => {
+    const placed = { count: 0, missed: [] as SizeLabel[] };
+    sizeRuns(
+      [run(0, 100, 300, 100, 0)],
+      sizeLabels([
+        label('F-Ø4"', 100, 88, 146, 101),
+        label('F-Ø3"', 100, 30, 146, 43),
+      ]),
+      { reach: 4, codes: ['F'] },
+      placed,
+    );
+    assert.equal(placed.count, 1);
+    assert.deepEqual(
+      placed.missed.map((l) => l.text),
+      ['F-Ø3"'],
+    );
+  });
+
+  it('remembers which label sized a run', () => {
+    const sized = sizeRuns(
+      [run(0, 0, 100, 0), run(100, 0, 100, 80)],
+      sizeLabels([label('Ø160-1%', 30, -12, 76, 1)]),
+      { reach: 4 },
+    );
+    assert.deepEqual(
+      sized.map((r) => r.label),
+      ['Ø160-1%', null],
+    );
   });
 
   it('gives a label to the one run it fits best', () => {

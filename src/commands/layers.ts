@@ -9,6 +9,8 @@ import { countLine, listOutput, type Row } from '../output/views.ts';
 import {
   areaOf,
   clipStrokes,
+  LETTER_GAPS,
+  linetypeLetters,
   NO_LAYER,
   openSheet,
   paperMm,
@@ -29,6 +31,8 @@ export function layers(input: CommandInput): string {
   const gap = paperMm(positiveNumber(input.values, 'gap', 8, 100));
   const min = paperMm(positiveNumber(input.values, 'min', 6, 1000));
   const area = areaOf(input.values);
+  const own = input.values.own === true;
+  const letters = linetypeLetters(sheet);
   let ptPerM: number | null = null;
   let scaleText = 'not stated; lengths are left out, pass --scale 1:N';
   try {
@@ -58,8 +62,15 @@ export function layers(input: CommandInput): string {
   for (const bucket of buckets.values()) {
     const layerName = sheet.layers[bucket.layer]?.name ?? NO_LAYER;
     if (match && !layerName.toLowerCase().includes(match)) continue;
+    // A layer brought in from a referenced file carries that file's name
+    // before a bar: the architect's background, mostly.
+    if (own && layerName.includes('|')) continue;
     let runLength = 0;
-    for (const run of buildRuns(segmentsOf(bucket.strokes), { gap }))
+    for (const run of buildRuns(segmentsOf(bucket.strokes), {
+      gap,
+      letters,
+      letterGap: gap * LETTER_GAPS,
+    }))
       if (run.length >= min) runLength += run.length;
     // The colour most of the layer's ink is drawn in.
     const inkByColor = new Map<number, number>();
