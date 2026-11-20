@@ -465,6 +465,15 @@ export function linetypeLetters(sheet: Sheet): Array<{ x: number; y: number }> {
     .map((l) => ({ x: (l.x0 + l.x1) / 2, y: (l.y0 + l.y1) / 2 }));
 }
 
+/** Pictures over this share of a page make it a picture page. */
+export const PICTURED = 0.5;
+/** Pictures over this share are worth a warning beside measured lengths. */
+export const PICTURE_NOTE = 0.05;
+
+/** A share from 0 to 1 as a whole percentage, never 0% for a real share. */
+export const percent = (share: number): string =>
+  `${share > 0 && share < 0.01 ? '<1' : Math.round(share * 100)}%`;
+
 /** A break with a linetype letter in it is joined up to this many gaps wide. */
 export const LETTER_GAPS = 2;
 

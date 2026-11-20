@@ -2,13 +2,15 @@
 // colours, with labels and a coordinate grid if asked. An agent turns it into
 // an image and looks at it when names and numbers are not enough.
 
-import type { Label, Stroke } from './model.ts';
+import type { Box, Label, Stroke } from './model.ts';
 
 export interface SvgOptions {
   x0: number;
   y0: number;
   x1: number;
   y1: number;
+  /** Where the sheet's own pictures are; drawn as outlined boxes. */
+  pictures?: readonly Box[];
   /** Width of the picture in pixels. */
   width: number;
   labels: boolean;
@@ -102,6 +104,22 @@ export function renderSvg(
     `<svg xmlns="http://www.w3.org/2000/svg" width="${options.width}" height="${height}" viewBox="${n1(x0)} ${n1(y0)} ${n1(w)} ${n1(h)}">`,
     `<rect x="${n1(x0)}" y="${n1(y0)}" width="${n1(w)}" height="${n1(h)}" fill="#ffffff"/>`,
   ];
+  // The sheet's own pictures are not drawn; a box with a cross shows where
+  // each one is, so lines missing from the picture are not taken for absent.
+  const inside = (options.pictures ?? []).filter(
+    (b) => b.x1 >= x0 && b.x0 <= x1 && b.y1 >= y0 && b.y0 <= y1,
+  );
+  if (inside.length) {
+    const line = n1((w / options.width) * 0.6);
+    out.push(
+      `<g fill="#f2f2f2" stroke="#b0b0b0" stroke-width="${line}"><title>picture: not drawn</title>`,
+    );
+    for (const b of inside)
+      out.push(
+        `<rect class="picture" x="${n1(b.x0)}" y="${n1(b.y0)}" width="${n1(b.x1 - b.x0)}" height="${n1(b.y1 - b.y0)}"/><path fill="none" d="M${n1(b.x0)} ${n1(b.y0)}L${n1(b.x1)} ${n1(b.y1)}M${n1(b.x1)} ${n1(b.y0)}L${n1(b.x0)} ${n1(b.y1)}"/>`,
+      );
+    out.push('</g>');
+  }
   if (options.grid) {
     const step = niceStep(Math.max(w, h));
     const size = n1((w / options.width) * 11);

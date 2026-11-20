@@ -31,7 +31,9 @@ import {
   linetypeLetters,
   list,
   openSheet,
+  PICTURE_NOTE,
   paperMm,
+  percent,
   pickLayer,
   pickLayers,
   positiveInt,
@@ -218,6 +220,10 @@ export function measure(input: CommandInput): string {
     { reach: paperMm(reachMm), codes },
     placed,
   );
+  const picturesLine =
+    sheet.pictureShare >= PICTURE_NOTE
+      ? `pictures cover ${percent(sheet.pictureShare)} of the page; pipes drawn in them are not measured`
+      : '';
   const labelsLine = `${placed.count} of ${labels.length} size labels in the area sit on a measured run${labels.length > placed.count ? '; the others belong to pipe that is not in these groups, or fit no run' : ''}`;
   const settingsText = settingsLine(
     settings,
@@ -350,6 +356,7 @@ export function measure(input: CommandInput): string {
       text: scaleLine(scale),
     },
     size_labels: labelsLine,
+    ...(picturesLine ? { pictures: picturesLine } : {}),
     settings_text: settingsText,
     settings: {
       gap_mm: settings.gapMm,
@@ -403,6 +410,7 @@ export function measure(input: CommandInput): string {
           scale: scaleLine(scale),
           settings: settingsText,
           size_labels: labelsLine,
+          ...(picturesLine ? { pictures: picturesLine } : {}),
           ...(saved ? { saved } : {}),
           groups: screen(groupRows).map((r) =>
             tableRow(

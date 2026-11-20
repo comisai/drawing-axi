@@ -7,7 +7,16 @@ import { nominalPtPerM, type Scale } from '../drawing/scale.ts';
 import { sizeLabels } from '../drawing/sizes.ts';
 import { AxiError } from '../errors.ts';
 import { type Row, recordOutput } from '../output/views.ts';
-import { openSheet, round, save, scaleOf, sheetSize, str } from './common.ts';
+import {
+  openSheet,
+  PICTURED,
+  percent,
+  round,
+  save,
+  scaleOf,
+  sheetSize,
+  str,
+} from './common.ts';
 
 /** How the scale was found, in words. */
 function basisText(scale: Scale): string {
@@ -47,16 +56,23 @@ export function info(input: CommandInput): string {
     sheet.strokes.filter((s) => s.layer >= 0).map((s) => s.layer),
   ).size;
   const notes: string[] = [];
+  // Most of the page a picture: whatever lines the file holds are what was
+  // drawn over it, such as a grid, so no advice about layers or colours.
+  const pictured = sheet.pictureShare >= PICTURED;
   if (!sheet.strokes.length && sheet.images)
     notes.push(
       'This page is a picture, such as a scan: it holds no lines to measure. Ask for the PDF plotted from the CAD file.',
     );
+  else if (pictured)
+    notes.push(
+      `Pictures cover ${percent(sheet.pictureShare)} of this page: the drawing is a picture. A pipe drawn in a picture is not a line, so it is not measured, and \`render\` shows only where the pictures are. Ask for the PDF plotted from the CAD file, not a print of it.`,
+    );
   else if (!sheet.strokes.length) notes.push('This page holds no lines.');
-  if (sheet.strokes.length && sheet.layers.length && !used)
+  if (!pictured && sheet.strokes.length && sheet.layers.length && !used)
     notes.push(
       'No line on this page is on a layer. Tell systems apart by colour: `drawing-axi layers <file.pdf> --split`.',
     );
-  if (sheet.strokes.length && !sheet.layers.length)
+  if (!pictured && sheet.strokes.length && !sheet.layers.length)
     notes.push(
       'The file keeps no layers. Tell systems apart by colour: `drawing-axi layers <file.pdf> --split`.',
     );
@@ -77,6 +93,11 @@ export function info(input: CommandInput): string {
     scale,
     layers: `${used} with ink on this page, ${sheet.layers.length} in the file${hidden ? ` (${hidden} switched off)` : ''}`,
     geometry: `${sheet.strokes.length} strokes, ${sheet.fills.length} fills, ${sheet.images} images`,
+    ...(sheet.images
+      ? {
+          pictures: `${sheet.images}, covering ${percent(sheet.pictureShare)} of the page`,
+        }
+      : {}),
     labels: `${count.shx} stroke-font, ${count.text} font text, ${count.note} notes`,
     size_labels: `${sizes.length} (${sizes.filter((s) => s.onRun).length} carry a slope or a system code, as a label on a pipe does)`,
     notes,

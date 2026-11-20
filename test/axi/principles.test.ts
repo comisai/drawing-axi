@@ -197,7 +197,7 @@ describe('AXI principles', () => {
     assert.equal(typeof doc.description, 'string');
     // The test runs with HOME set to the folder, so it is shown as home.
     assert.equal(doc.folder, '~');
-    assert.equal(rowsOf(doc, 'drawings').length, 5);
+    assert.equal(rowsOf(doc, 'drawings').length, 6);
     assert.equal(doc.commands, undefined);
   });
 

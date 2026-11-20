@@ -37,6 +37,7 @@ These facts were checked on eight sheets from one design office: plumbing and fi
 | F13 | **Legend samples are drawn on the system's layer.** The line beside "cold water pipe" in the legend is on the cold water layer. Its colour may differ from the lines in the plan. | Pairing captions with samples maps layers to systems in the drawing's own words. Colour still needs a look. |
 | F14 | **Risers have tags.** An identifier with the size written under it, inside one symbol: 155 on one sheet. | Pair them and count per size. |
 | F15 | **Files have defects.** One stream in each file declares the wrong length; a common extractor prints errors and carries on. | Trust a length only when the end marker follows it. |
+| F16 | **Some offices send prints, not plots.** Eight sheets from a second office were printed through a PDF printer: the layers and stroke-font labels are gone, and the drawing is 155 lossless picture tiles covering the page. Only the column grid and the leaders are lines, and the labels are font text. | Say how much of the page pictures cover; above half, the drawing is a picture and is not measured. Ask for the CAD plot. Measuring coloured pipe in the pictures is a later feature (§9). |
 
 **What was measured.** The live test (§11) compares run lengths with a person's takeoff of the same project, by system and floor. All 17 comparisons on five sheets are within 10%. The largest differences are 9.7% and 9.2%; half are under 4%.
 
@@ -237,7 +238,7 @@ Layer names and labels are written by people outside. Invisible and control char
 ## 8. Skill
 
 The Comis skill `drawing-takeoff` ships in the apps pack with the tool. It teaches:
-1. `info` each sheet. Stop and tell the owner if a sheet is a scan, or keeps no layers or labels.
+1. `info` each sheet. Stop and tell the owner if a sheet is a scan or a print whose drawing is a picture, or keeps no layers or labels.
 2. `legend`, then `layers`, to map layers to systems. Look (`render`) before trusting a colour.
 3. One `measure` per sheet with every system as a group, excluding the legend and title block, saved as JSON.
 4. `tags` and `symbols` for what is counted, not measured.
@@ -286,7 +287,7 @@ No Gate change is needed: the tool uses no network and holds no secret. The draw
 2. **Release:** public repository, CI, npm with provenance.
 3. **Comis:** C1 to C6.
 4. **More offices:** qualify on drawings from at least two other design offices; fix what they show.
-5. **Later, by demand:** measure dictionaries in PDFs that carry them; DXF input; curved runs; a length check against `l=` notes on the sheet.
+5. **Later, by demand:** measure dictionaries in PDFs that carry them; DXF input; curved runs; a length check against `l=` notes on the sheet; measuring coloured pipe inside lossless picture tiles, read against the sheet's legend swatches (F16).
 
 ## 13. Open questions and risks
 

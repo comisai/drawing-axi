@@ -7,7 +7,12 @@ import { readSheet } from '../src/drawing/extract.ts';
 import type { Sheet } from '../src/drawing/model.ts';
 import { PdfDocument } from '../src/pdf/document.ts';
 import type { PdfOptions } from './fixtures/pdf.ts';
-import { oddDrawing, sampleDrawing, scanLike } from './fixtures/sample.ts';
+import {
+  oddDrawing,
+  pictureDrawing,
+  sampleDrawing,
+  scanLike,
+} from './fixtures/sample.ts';
 
 export function tempDir(): string {
   return mkdtempSync(join(tmpdir(), 'drawing-axi-test-'));
@@ -54,6 +59,7 @@ export function fixtureFolder(): string {
   );
   writeFileSync(join(dir, 'scan.pdf'), scanLike());
   writeFileSync(join(dir, 'odd.pdf'), oddDrawing());
+  writeFileSync(join(dir, 'picture.pdf'), pictureDrawing());
   writeFileSync(join(dir, 'locked.pdf'), sampleDrawing({ encrypted: true }));
   writeFileSync(join(dir, 'notes.txt'), 'not a drawing\n');
   return dir;
