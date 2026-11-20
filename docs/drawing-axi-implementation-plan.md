@@ -201,12 +201,12 @@ A fresh worker drafted a bill of quantities from a real level (a ceiling sheet a
 
 | Area | Finding | Planned change |
 | --- | --- | --- |
-| Legend | A dashed sample and a sample drawn as a centre line with two side lines were missed or listed twice, and the box stopped short of them and of the fixture samples | Join a sample's dashes before pairing; pair one caption with one sample; grow the box to every caption and sample row |
+| Legend | A dashed sample and a sample drawn as a centre line with two side lines were missed or listed twice, and the box stopped short of them and of the fixture samples | Done in 0.1.2 for rows lost to rounding and indented samples (8–12 rows became 12–13 on one office's sheets). Open: one caption shown as two samples; the box round symbol rows |
 | Legend | It names no layer for fixture samples | List symbol samples with their layer, as line samples are |
 | Symbols | A symbol drawn as a fill alone is not counted; the same symbol has a different number of parts on two sheets | Count fills as symbols; add a match by place across two files |
 | Sizes | `labels_apart` shows one label text for several different texts | Done in 0.1.1: one row per text |
 | Sizes | A coded label written in a break of a line was kept for the group of its code, and the line came back unsized (found by the keyed live run) | Done in 0.1.1: a label in a break sizes its line |
-| Sizes | Labels that found no run are counted but not listed | Save them with their place |
+| Sizes | Labels that found no run are counted but not listed | Done in 0.1.2: `unplaced` in the saved file |
 | Sizes | A label with no system code, written between two parallel pipes of different systems, sizes one of them; one such label sized a neighbouring system's run | Report a label that fits two groups about equally as shared, and size neither |
 | Tags | A number in the background's font text was paired with a size; single-letter tags are missed; the frame shape is not reported | Pair within one text source first; allow one-letter identifiers; report the frame |
 | Tags | The help calls every tag a riser tag | Say "tag"; a tag at a pipe's end is not a riser |
@@ -214,6 +214,20 @@ A fresh worker drafted a bill of quantities from a real level (a ceiling sheet a
 | Layers | Layers with no ink are not named; `info` has no `--save` | `layers --all`; `info --save` |
 | Picture | `render --labels` draws background font text at the size of its box | Cap the drawn text height |
 | Text | Text drawn as outlines cannot be read | Out of reach for now; `info` should say when a sheet has it |
+
+Three more workers took real levels from two offices in 0.1.1, blind to the people's bills. Their notes led to 0.1.2:
+
+| Finding | Done in 0.1.2 |
+| --- | --- |
+| Linetype letters plotted as strokes joined into sparse lines beside the pipe (sprinklers 646 m, person 252 m) | Shadow runs left out and counted |
+| Slope labels sized water, fire and pumped lines through their dash gaps | A coded group takes only its code's labels and sizes written alone |
+| `OD7A` read as code `ODA` | The code is the letters before the first digit |
+| The default reach placed 44 of 233 labels on one office's sheets | `measure` says how many a wider reach would place |
+| Water dashes 8.5 mm apart read 35 to 55% short at the 8 mm gap | `gaps` names the group; `--group-gap` |
+| A paving hatch taken for the scale bar: 102.4% instead of 98.7% | A bar in a field of the same ink is refused |
+| Legend rows lost when the sample column was rounded two ways, an indented sample, and captions ending in a Latin code left undecoded | Fixed |
+| Sizes written alone beside pipes could not be used without also using riser tags' sizes | `--plain` skips sizes a tag claims, and fixture labels |
+| The saved file had no layers per group and no unplaced labels; cut tables did not say so | Added |
 
 ## 8. What is not in this plan
 

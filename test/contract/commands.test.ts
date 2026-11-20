@@ -761,8 +761,8 @@ describe('what real sheets showed', () => {
       ],
     );
     // Name another group W: the label is written in a break of the water
-    // line, so it still sizes that line. (A label beside a line follows the
-    // code; the unit tests hold that.)
+    // line, so it still sizes that line. The group named W takes only
+    // labels coded W, so the rain label no longer sizes the rain line.
     const other = await ok(
       'measure',
       'plan.pdf',
@@ -776,7 +776,7 @@ describe('what real sheets showed', () => {
     assert.deepEqual(
       rowsOf(other, 'sizes').map((r) => [r.group, r.size, r.length_m]),
       [
-        ['W', 'Ø110', 12],
+        ['W', 'unsized', 12],
         ['pipes', '3"', 9],
       ],
     );
@@ -896,11 +896,18 @@ describe('what real sheets showed', () => {
     const doc = await ok('tags', 'odd.pdf', '--save', 't.json');
     assert.deepEqual(rowsOf(doc, 'tags'), [
       { series: 'R', size: '4"', count: 1, tags: 'R1' },
+      { series: 'R', size: 'Ø110', count: 1, tags: 'R2' },
     ]);
     const saved = JSON.parse(readFileSync(join(dir, 't.json'), 'utf8'));
-    assert.deepEqual(saved.places, [
-      { tag: 'R1', series: 'R', size: '4"', x: 600, y: 200 },
-    ]);
+    assert.deepEqual(
+      [...saved.places].sort((a: { tag: string }, b: { tag: string }) =>
+        a.tag.localeCompare(b.tag),
+      ),
+      [
+        { tag: 'R1', series: 'R', size: '4"', x: 600, y: 200 },
+        { tag: 'R2', series: 'R', size: 'Ø110', x: 700, y: 200 },
+      ],
+    );
   });
 
   it('groups symbols layer by layer, and saves where each one is', async () => {
@@ -950,6 +957,172 @@ describe('what real sheets showed', () => {
     assert.ok(names(all).includes('XREF|Walls'));
     assert.ok(!names(own).includes('XREF|Walls'));
     assert.equal(names(own).length, names(all).length - 1);
+  });
+});
+
+describe('what a real level showed', () => {
+  it('says when a group joins much further at a wider gap, and takes a gap for one group', async () => {
+    const doc = await ok('measure', 'odd.pdf', '--group', 'W=WIDE');
+    assert.equal(rowsOf(doc, 'groups')[0]?.length_m, 5.1);
+    assert.equal(
+      doc.gaps,
+      'group W: at 12 mm its pieces join into 8 m, not 5.1 m; its dashes may be farther apart than --gap. Check with `drawing-axi runs`, then pass --group-gap W=12',
+    );
+    const wide = await ok(
+      'measure',
+      'odd.pdf',
+      '--group',
+      'W=WIDE',
+      '--group-gap',
+      'W=12',
+    );
+    assert.equal(rowsOf(wide, 'groups')[0]?.length_m, 8);
+    assert.equal(wide.gaps, undefined);
+    assert.match(
+      String(wide.settings),
+      /; group W joins pieces up to 12 mm apart;/,
+    );
+    const bad = await fails(
+      'usage',
+      2,
+      'measure',
+      'odd.pdf',
+      '--group',
+      'W=WIDE',
+      '--group-gap',
+      'X=12',
+    );
+    assert.match(String(bad.message), /names no group/);
+  });
+
+  it('leaves out linetype letters plotted beside their pipe, and says so', async () => {
+    const doc = await ok(
+      'measure',
+      'odd.pdf',
+      '--group',
+      'S=SPR',
+      '--save',
+      's.json',
+    );
+    assert.deepEqual(
+      rowsOf(doc, 'groups').map((r) => [r.group, r.length_m, r.runs]),
+      [['S', 6, 1]],
+    );
+    assert.match(
+      String(doc.settings),
+      /; 1 run that rides along another, 5.9 m, left out as linetype lettering;/,
+    );
+    const runs = await ok('runs', 'odd.pdf', '--layer', 'SPR');
+    assert.equal(rowsOf(runs, 'runs').length, 1);
+  });
+
+  it('saves the layers of each group and every label that found no run', async () => {
+    await ok(
+      'measure',
+      'odd.pdf',
+      '--group',
+      'sewer=SEW',
+      '--group',
+      'x=A+B',
+      '--save',
+      'u.json',
+    );
+    const saved = JSON.parse(readFileSync(join(dir, 'u.json'), 'utf8'));
+    assert.deepEqual(
+      saved.groups.map((g: { group: string; layers: string[] }) => [
+        g.group,
+        g.layers,
+      ]),
+      [
+        ['sewer', ['SEW']],
+        ['x', ['A+B']],
+      ],
+    );
+    assert.ok(
+      saved.unplaced.some(
+        (l: { label: string; x: number; y: number }) =>
+          l.label === 'Ø160-1%' && l.x === 625 && l.y === 187,
+      ),
+    );
+  });
+
+  it('says what an unknown flag with a space in it means, without echoing it', async () => {
+    const doc = await fails(
+      'usage',
+      2,
+      'measure',
+      'odd.pdf',
+      '--group a=SEW --group b=C',
+    );
+    assert.match(String(doc.message), /The flag held a space/);
+    assert.doesNotMatch(String(doc.message), /a=SEW/);
+  });
+
+  it('says how many more size labels a wider reach would place', async () => {
+    const doc = await ok('measure', 'odd.pdf', '--group', 'sewer=SEW');
+    assert.equal(rowsOf(doc, 'sizes')[0]?.size, 'unsized');
+    assert.match(
+      String(doc.size_labels),
+      /; 1 more sits within 3 mm of a run: try --reach 3 and check sized_by$/,
+    );
+    const near = await ok(
+      'measure',
+      'odd.pdf',
+      '--group',
+      'sewer=SEW',
+      '--reach',
+      '3',
+    );
+    assert.deepEqual(
+      rowsOf(near, 'sizes').map((r) => [r.size, r.length_m]),
+      [['Ø160', 8]],
+    );
+    assert.doesNotMatch(String(near.size_labels), /more sits/);
+  });
+});
+
+describe('sizes written alone', () => {
+  it('uses them with --plain only when no tag claims them', async () => {
+    const args = [
+      'measure',
+      'odd.pdf',
+      '--group',
+      'grey=GREY',
+      '--group',
+      't=TAGLINE',
+    ];
+    const sizes = async (...more: string[]) =>
+      rowsOf(await ok(...args, ...more), 'sizes').map((r) => [r.group, r.size]);
+    assert.deepEqual(await sizes(), [
+      ['grey', 'unsized'],
+      ['t', 'unsized'],
+    ]);
+    // The size beside the grey line is its own; the one beside the other
+    // line is riser R2's, and stays the tag's.
+    assert.deepEqual(await sizes('--plain'), [
+      ['grey', 'Ø63'],
+      ['t', 'unsized'],
+    ]);
+    const tags = await ok('tags', 'odd.pdf');
+    assert.ok(rowsOf(tags, 'tags').some((r) => r.tags === 'R2'));
+    // A size written alone sizes a group named by a code; a fixture's label
+    // with its sizes in it sizes nothing.
+    const coded = await ok(
+      'measure',
+      'odd.pdf',
+      '--group',
+      'CW=CWL',
+      '--group',
+      'grey=GREY',
+      '--plain',
+    );
+    assert.deepEqual(
+      rowsOf(coded, 'sized_by').map((r) => [r.group, r.label]),
+      [
+        ['CW', 'Ø32'],
+        ['grey', 'Ø63'],
+      ],
+    );
   });
 });
 

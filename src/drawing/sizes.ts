@@ -17,6 +17,8 @@ export interface SizeLabel {
   text: string;
   /** The system code it starts with, letters only: F, CW, HF. Null without one. */
   code: string | null;
+  /** The label is a size and nothing else, such as Ø63 or 4". */
+  alone: boolean;
   /** Written as a run label: it carries a slope or a system prefix. */
   onRun: boolean;
   x0: number;
@@ -33,10 +35,18 @@ const INCH = /(?:\u00d8\s*)?(\d{1,2}(?:\.\d+)?(?:\s*\d\/\d)?|\d\/\d)\s*"/;
 const DN = /\bDN\s*(\d{2,4})\b/i;
 const SLOPE = /\d\s*-\s*\d+(?:\.\d+)?\s*%|\d\s*%/;
 const PREFIX = /^[A-Za-z][A-Za-z0-9.]{0,5}\s*-/;
+/** A size and nothing else: Ø63, 4", 3/4", DN100. */
+const ALONE =
+  /^(?:\u00d8\s*\d+(?:[.,]\d+)?|\d+(?:\/\d+)?(?:\s*\d\/\d)?\s*"|DN\s*\d+)$/i;
 
-/** A system code reduced to its letters: "C.W.2-" and "CW1" are both CW. */
+/**
+ * A system code: the letters before the first digit, dots left out. "C.W.2-"
+ * and "CW1" are both CW, and "OD7A" is OD: a letter after the number names
+ * one line of the system, not another system.
+ */
 export function codeOf(text: string): string | null {
-  const letters = text.replace(/[^A-Za-z]/g, '').toUpperCase();
+  const head = /^[^0-9]*/.exec(text)?.[0] ?? '';
+  const letters = head.replace(/[^A-Za-z]/g, '').toUpperCase();
   return letters || null;
 }
 
@@ -65,6 +75,7 @@ export function sizeLabels(labels: readonly Label[]): SizeLabel[] {
       size,
       text: label.text.trim(),
       code: prefix ? codeOf(prefix[0]) : null,
+      alone: ALONE.test(label.text.trim()),
       onRun: SLOPE.test(label.text) || prefix !== null,
       x0: label.x0,
       y0: label.y0,
@@ -160,15 +171,21 @@ export function sizeRuns(
           if (tried.has(index)) continue;
           tried.add(index);
           const groupCode = codes[(out[index] as SizedRun).group] ?? null;
+          // A group named by a code takes only labels of that code, and sizes
+          // written alone; never a slope label, which is a gravity pipe's.
+          if (groupCode !== null && label.code !== groupCode && !label.alone)
+            continue;
           const score = fit(label, cx, cy, out[index] as SizedRun, options);
-          // A label written in a break of a line is that line's, whatever
-          // the groups are called. Beside a line, a coded label belongs to
-          // the group of that code, when there is one, and never to a group
-          // of another code.
-          if (score >= 1 && label.code !== null) {
-            if (bound.has(label.code) && groupCode !== label.code) continue;
-            if (groupCode !== null && groupCode !== label.code) continue;
-          }
+          // A label written in a break of an unnamed group's line is that
+          // line's. Beside a line, a coded label belongs to the group of its
+          // code, when there is one.
+          if (
+            score >= 1 &&
+            label.code !== null &&
+            bound.has(label.code) &&
+            groupCode !== label.code
+          )
+            continue;
           if (score < bestScore) {
             best = index;
             bestScore = score;

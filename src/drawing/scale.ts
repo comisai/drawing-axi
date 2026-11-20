@@ -117,6 +117,7 @@ export function findScaleBar(
     ptPerM: number;
     bar: NonNullable<Scale['bar']>;
     cells: number;
+    beside: number;
   } | null = null;
   // Twin edges start at the same place, so only those are compared.
   const buckets = new Map<string, Edge[]>();
@@ -147,8 +148,18 @@ export function findScaleBar(
       ink ??= inkIndex(sheet);
       const cells = barCells(ink, a, b);
       if (cells < 4) continue;
-      if (!best || cells > best.cells)
+      // A scale bar stands alone. A hatch, such as paving drawn in the plan,
+      // is a field: the same ink goes on beyond the band on both sides. Of
+      // equal bars, the one with the least ink beside it is taken.
+      const beside = besideInk(ink, a, b);
+      if (beside === null) continue;
+      if (
+        !best ||
+        cells > best.cells ||
+        (cells === best.cells && beside < best.beside)
+      )
         best = {
+          beside,
           ptPerM: length / metres,
           cells,
           bar: {
@@ -203,6 +214,46 @@ function inkIndex(sheet: Sheet): InkIndex {
  * How many alternating cells lie between two edges, or 0. A bar is one row of
  * dark and light cells, or two rows in a checker pattern.
  */
+/** The ink that lies within a band along a bar, at an offset across it. */
+function bandInk(ink: InkIndex, a: Edge, from: number, to: number): number {
+  const length = a.to - a.from;
+  const x0 = a.horizontal ? a.from : from;
+  const x1 = a.horizontal ? a.to : to;
+  const y0 = a.horizontal ? from : a.from;
+  const y1 = a.horizontal ? to : a.to;
+  let total = 0;
+  for (
+    let gx = Math.floor(x0 / INK_CELL);
+    gx <= Math.floor(x1 / INK_CELL);
+    gx++
+  )
+    for (
+      let gy = Math.floor(y0 / INK_CELL);
+      gy <= Math.floor(y1 / INK_CELL);
+      gy++
+    )
+      for (const mark of ink.get(gx * 100_003 + gy) ?? []) {
+        if (mark.size > length * 0.35) continue;
+        if (mark.x > x0 && mark.x < x1 && mark.y > y0 && mark.y < y1)
+          total += mark.weight;
+      }
+  return total;
+}
+
+/**
+ * The ink beside a bar's band, as a share of the band's own: the bands of
+ * the same depth on each side. Null when the bar sits in a field of the same
+ * ink, both sides holding at least half as much as the bar.
+ */
+function besideInk(ink: InkIndex, a: Edge, b: Edge): number | null {
+  const depth = b.at - a.at;
+  const own = bandInk(ink, a, a.at, b.at);
+  if (own <= 0) return 0;
+  const before = bandInk(ink, a, a.at - depth, a.at) / own;
+  const after = bandInk(ink, a, b.at, b.at + depth) / own;
+  return before >= 0.5 && after >= 0.5 ? null : before + after;
+}
+
 function barCells(ink: InkIndex, a: Edge, b: Edge): number {
   const length = a.to - a.from;
   const depth = b.at - a.at;

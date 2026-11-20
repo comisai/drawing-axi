@@ -58,7 +58,7 @@ export function parseCommand(spec: CommandSpec, argv: string[]): Parsed {
     const f = spec.flags[token.name];
     if (!f) {
       throw usage(
-        `Unknown flag${shownFlag(token.rawName)} for \`${name}\`. ${valid.length ? `Valid flags: ${valid.join(', ')}.` : 'It takes no flags.'}`,
+        `Unknown flag${shownFlag(token.rawName)} for \`${name}\`.${/\s/.test(token.rawName) ? ' The flag held a space, as a shell gives when a variable of several flags is not split into words; pass each flag as its own argument.' : ''} ${valid.length ? `Valid flags: ${valid.join(', ')}.` : 'It takes no flags.'}`,
       );
     }
     if (f.type === 'boolean' && token.inlineValue)

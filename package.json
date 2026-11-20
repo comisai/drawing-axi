@@ -1,6 +1,6 @@
 {
   "name": "drawing-axi",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "A command-line tool that lets AI agents read CAD drawings saved as PDF: layers, labels, scale, pipe runs and counts",
   "license": "MIT",
   "type": "module",

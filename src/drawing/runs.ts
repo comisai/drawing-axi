@@ -336,3 +336,83 @@ export function runsTouch(a: Run, b: Run, tolerance: number): boolean {
     ) < tolerance
   );
 }
+
+/** How far, in points, a shadow run may lie from the run it follows. */
+const SHADOW_OFFSET = 5;
+
+/** The share of a run's length that carries ink, from 0 to 1. */
+export function inkShare(run: Run): number {
+  if (!run.length) return 0;
+  let ink = 0;
+  for (let i = 0; i < run.drawn.length; i += 2)
+    ink += (run.drawn[i + 1] as number) - (run.drawn[i] as number);
+  return Math.min(1, ink / run.length);
+}
+
+/**
+ * Leaves out runs that ride along a longer run: a row of linetype letters
+ * plotted as strokes beside its pipe joins into a sparse line a point or two
+ * off the pipe. A run is left out when it lies within a few points of a
+ * longer run, along at least 70% of its own length, in the same direction,
+ * and carries under half as much ink, which the other beats by a fifth. The
+ * side lines of a pipe drawn with three lines are solid and stay.
+ */
+export function dropShadows(runs: readonly Run[]): {
+  kept: Run[];
+  dropped: number;
+} {
+  const sinMax = Math.sin((4 * Math.PI) / 180);
+  const ink = runs.map(inkShare);
+  const boxes = runs.map((r, i) => ({
+    i,
+    x0: Math.min(r.x0, r.x1) - SHADOW_OFFSET,
+    x1: Math.max(r.x0, r.x1) + SHADOW_OFFSET,
+    y0: Math.min(r.y0, r.y1) - SHADOW_OFFSET,
+    y1: Math.max(r.y0, r.y1) + SHADOW_OFFSET,
+  }));
+  boxes.sort((a, b) => a.x0 - b.x0);
+  const shadow = new Uint8Array(runs.length);
+  for (let a = 0; a < boxes.length; a++) {
+    const A = boxes[a] as (typeof boxes)[number];
+    for (let b = a + 1; b < boxes.length; b++) {
+      const B = boxes[b] as (typeof boxes)[number];
+      if (B.x0 > A.x1) break;
+      if (B.y0 > A.y1 || B.y1 < A.y0) continue;
+      for (const [s, p] of [
+        [A.i, B.i],
+        [B.i, A.i],
+      ] as const) {
+        const short = runs[s] as Run;
+        const long = runs[p] as Run;
+        if (shadow[s] || long.length < short.length) continue;
+        if (
+          !(
+            (ink[s] as number) < 0.5 &&
+            (ink[p] as number) >= (ink[s] as number) + 0.2
+          )
+        )
+          continue;
+        const ux = (long.x1 - long.x0) / long.length;
+        const uy = (long.y1 - long.y0) / long.length;
+        const vx = (short.x1 - short.x0) / (short.length || 1);
+        const vy = (short.y1 - short.y0) / (short.length || 1);
+        if (Math.abs(ux * vy - uy * vx) > sinMax) continue;
+        const off = (x: number, y: number) =>
+          Math.abs((x - long.x0) * uy - (y - long.y0) * ux);
+        if (
+          off(short.x0, short.y0) > SHADOW_OFFSET ||
+          off(short.x1, short.y1) > SHADOW_OFFSET
+        )
+          continue;
+        const t0 = (short.x0 - long.x0) * ux + (short.y0 - long.y0) * uy;
+        const t1 = (short.x1 - long.x0) * ux + (short.y1 - long.y0) * uy;
+        const over =
+          Math.min(long.length, Math.max(t0, t1)) -
+          Math.max(0, Math.min(t0, t1));
+        if (over >= short.length * 0.7) shadow[s] = 1;
+      }
+    }
+  }
+  const kept = runs.filter((_, i) => !shadow[i]);
+  return { kept, dropped: runs.length - kept.length };
+}
