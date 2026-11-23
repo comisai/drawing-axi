@@ -230,6 +230,7 @@ export function readSheet(
   const strokes: Stroke[] = [];
   const fills: Fill[] = [];
   const texts: Label[] = [];
+  let unreadableText = 0;
   const skipped = new Set<string>();
   let images = 0;
   const pictures: Box[] = [];
@@ -335,6 +336,7 @@ export function readSheet(
     };
     let pending: {
       label: Label;
+      unreadable: boolean;
       endX: number;
       endY: number;
       dirX: number;
@@ -342,10 +344,11 @@ export function readSheet(
       em: number;
     } | null = null;
     const flushText = () => {
-      const made = pending?.label;
-      if (made?.raw.trim() && texts.length < MAX_LABELS) {
-        if (labelFits(made)) texts.push(made);
-        else outside++;
+      if (pending && (pending.unreadable || pending.label.raw.trim())) {
+        const { label, unreadable } = pending;
+        if (!labelFits(label)) outside++;
+        else if (unreadable) unreadableText++;
+        else if (texts.length < MAX_LABELS) texts.push(label);
       }
       pending = null;
     };
@@ -467,7 +470,7 @@ export function readSheet(
 
     const showText = (bytes: Uint8Array) => {
       const font = text.font;
-      if (!font) return;
+      if (!font || !bytes.length) return;
       const shown = fontText(font, bytes);
       const m = mul(text.tm, gs.ctm);
       const stretch = Math.hypot(m[0], m[1]);
@@ -475,11 +478,10 @@ export function readSheet(
       const dirX = m[0] / stretch;
       const dirY = m[1] / stretch;
       const em = text.size * Math.hypot(m[2], m[3]);
-      const spaces = shown.text.split(' ').length - 1;
       const advance =
         ((shown.advance / 1000) * text.size +
           shown.codes * text.charSpace +
-          spaces * text.wordSpace) *
+          shown.spaces * text.wordSpace) *
         text.scale;
       const length = advance * stretch;
       const x = m[4];
@@ -507,6 +509,7 @@ export function readSheet(
       if (pending && joins) {
         const gap = (x - pending.endX) * dirX + (y - pending.endY) * dirY;
         const l = pending.label;
+        pending.unreadable ||= shown.unreadable;
         l.raw += (gap > 0.25 * em ? ' ' : '') + shown.text;
         l.x0 = Math.min(l.x0, ...xs);
         l.y0 = Math.min(l.y0, ...ys);
@@ -528,6 +531,7 @@ export function readSheet(
             y1: Math.max(...ys),
             vertical: Math.abs(dirY) > Math.abs(dirX),
           },
+          unreadable: shown.unreadable,
           endX: x + dirX * length,
           endY: y + dirY * length,
           dirX,
@@ -910,6 +914,7 @@ export function readSheet(
     strokes,
     fills,
     labels: [...comments, ...texts],
+    unreadableText,
     images,
     pictures,
     pictureShare: pictureShare(pictures, width, height),

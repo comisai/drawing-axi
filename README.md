@@ -122,9 +122,11 @@ sized_by[3]{group,size,label,labelled_m,runs}:
 - **Unsized.** What no label sizes is reported as `unsized`. The tool never guesses a size. `size_labels` says how many more labels a reach twice as wide would place, for an office that writes its sizes a few millimetres off the pipe. `--plain` adds sizes written alone, such as `Ø63`, that no riser tag claims.
 - **Not on a plan.** Vertical lengths, fittings, hangers and insulation are not drawn to scale on a plan. `tags` and `symbols` count what the sheet marks; the rest needs rules or a person.
 
-### Hebrew and other stroke-font text
+### Hebrew and PDF font text
 
 CAD stroke fonts keep text in the file as the keys the drafter typed. drawing-axi turns `%%C` into Ø, reads Hebrew typed on Latin keys, puts digits stored back to front in reading order, and leaves Latin text alone. `labels --each --full` adds the stored text wherever decoding changed it.
+
+When the PDF’s Unicode map is missing or maps a glyph to a control character, drawing-axi tries the font’s encoding. This includes numbered glyphs from legacy Hebrew fonts that store Windows-1255 bytes. If any font labels still cannot be decoded, `labels` leaves them out and reports `text_status` for the selected page, including in `--save` JSON. Ask for a PDF re-exported with selectable text.
 
 ## Exit codes and errors
 

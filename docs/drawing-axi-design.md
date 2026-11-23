@@ -174,6 +174,8 @@ Stroke-font text is decoded in this order (`src/drawing/shx.ts`):
 
 On a sheet with stroke-font labels, font text is hidden by default and counted in the header, because there it is the background plan (F6).
 
+Font text uses usable `ToUnicode` entries first and falls back to the font’s encoding for missing or unusable entries. Some Type 1 fonts name their glyphs after the original byte values. The reader uses those values with Windows-1255 when the glyph set indicates Hebrew. It skips a font label if any of its glyphs remain undecodable. `labels` reports the omission in the selected page’s `text_status`.
+
 ### 7.3 Scale
 
 1. The ratio is the most likely `1:N` on the sheet: the one beside a "scale" caption in any of several languages, else the most frequent.

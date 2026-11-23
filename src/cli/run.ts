@@ -157,7 +157,7 @@ export const COMMANDS: readonly CommandSpec[] = [
       full: FULL_FLAG,
       save: SAVE_FLAG,
     },
-    summary: 'The text on the sheet: legend, notes, sizes, tags',
+    summary: 'Read the sheet’s labels and report any unreadable font text',
     run: labels,
   },
   {

@@ -47,6 +47,10 @@ export interface PdfOptions {
    * one file does: each page still names its layers in its own resources.
    */
   noCatalogLayers?: boolean;
+  /** Entries after /Type /Font in the test font dictionary. */
+  font?: string;
+  /** A character map stream for the test font. */
+  toUnicode?: string;
 }
 
 type Point = [number, number];
@@ -283,10 +287,16 @@ export function buildPdf(pages: PageSpec[], options: PdfOptions = {}): Buffer {
     2,
     `<< /Type /Pages /Count ${pageRefs.length} /Kids [${pageRefs.map((n) => `${n} 0 R`).join(' ')}] >>`,
   );
-  objects.set(
-    3,
-    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>',
-  );
+  let toUnicode = '';
+  if (options.toUnicode !== undefined) {
+    const data = Buffer.from(options.toUnicode, 'ascii');
+    toUnicode = ` /ToUnicode ${next} 0 R`;
+    objects.set(next++, { dict: `<< /Length ${data.length} >>`, data });
+  }
+  const font =
+    options.font ??
+    '/Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding';
+  objects.set(3, `<< /Type /Font ${font}${toUnicode} >>`);
 
   const size = next;
   const chunks: Buffer[] = [
