@@ -15,6 +15,7 @@ export interface Font {
   /** Bytes per character code. */
   bytes: 1 | 2;
   toUnicode: Map<number, string> | null;
+  fallback: (code: number) => string | null;
   /** Advance of a code in thousandths of the font size. */
   width: (code: number) => number;
 }
@@ -82,6 +83,75 @@ export function parseToUnicode(data: Uint8Array): Map<number, string> {
   return map;
 }
 
+function byteValues(encoding: string): string[] {
+  const decoder = new TextDecoder(encoding);
+  return Array.from({ length: 256 }, (_, byte) =>
+    decoder.decode(Uint8Array.of(byte)),
+  );
+}
+
+const WIN_ANSI = byteValues('windows-1252');
+const HEBREW = byteValues('windows-1255');
+const MAC_ROMAN = byteValues('macintosh');
+const UNREADABLE = /[\p{Cc}\p{Cs}\ufffd]/u;
+
+function simpleEncoding(
+  doc: PdfDocument,
+  dict: Dict,
+  hasUnicodeMap: boolean,
+): Font['fallback'] {
+  const encoding = doc.resolve(dict.get('Encoding') ?? null);
+  const encodingDict = doc.dict(encoding);
+  const base =
+    encoding instanceof Name
+      ? encoding
+      : doc.resolve(encodingDict?.get('BaseEncoding') ?? null);
+  const baseName = base instanceof Name ? base.name : undefined;
+  const differences = doc.array(encodingDict?.get('Differences'));
+  const glyphs = new Map<number, number | null>();
+  let code = -1;
+  for (const entry of differences) {
+    if (typeof entry === 'number') {
+      code = Number.isInteger(entry) && entry >= 0 && entry <= 255 ? entry : -1;
+    } else if (entry instanceof Name && code >= 0 && code <= 255) {
+      const decimal = /^MT(\d{1,3})$/.exec(entry.name);
+      const byte = decimal ? Number(decimal[1]) : -1;
+      glyphs.set(code++, byte >= 0 && byte <= 255 ? byte : null);
+    }
+  }
+  // Some legacy Type 1 subsets name a glyph MT followed by its original
+  // decimal byte. Several distinct high bytes in the Hebrew letter range,
+  // with no other high bytes or explicit base, signal Windows-1255.
+  const highBytes = new Set(
+    [...glyphs.values()].filter((b): b is number => b !== null && b >= 0x80),
+  );
+  const numberedEncoding =
+    baseName === undefined &&
+    highBytes.size >= 3 &&
+    [...highBytes].every((b) => b >= 0xe0 && b <= 0xfa)
+      ? HEBREW
+      : WIN_ANSI;
+  const decoder =
+    baseName === 'WinAnsiEncoding'
+      ? WIN_ANSI
+      : baseName === 'MacRomanEncoding'
+        ? MAC_ROMAN
+        : null;
+  return (code) => {
+    const glyph = glyphs.get(code);
+    if (glyph === null) return null;
+    if (glyph !== undefined) return numberedEncoding[glyph] ?? null;
+    if (decoder) return decoder[code] ?? null;
+    // Keep the byte interpretation of ordinary simple fonts with no map.
+    // A broken map on an otherwise unknown encoding gives us no such basis.
+    if (baseName === undefined && !hasUnicodeMap)
+      return String.fromCharCode(code);
+    if (baseName === 'StandardEncoding' && code < 0x7f)
+      return String.fromCharCode(code);
+    return null;
+  };
+}
+
 export function readFont(doc: PdfDocument, dict: Dict): Font {
   const subtype = dict.get('Subtype');
   const composite = subtype instanceof Name && subtype.name === 'Type0';
@@ -121,6 +191,7 @@ export function readFont(doc: PdfDocument, dict: Dict): Font {
     return {
       bytes: 2,
       toUnicode,
+      fallback: () => null,
       width: (code) => widths.get(code) ?? fallback,
     };
   }
@@ -130,30 +201,40 @@ export function readFont(doc: PdfDocument, dict: Dict): Font {
   return {
     bytes: 1,
     toUnicode,
+    fallback: simpleEncoding(doc, dict, toUnicode !== null),
     width: (code) => widths[code - first] || 500,
   };
 }
 
-/** Decode a shown string; codes with no known character become U+FFFD. */
+/** Decode a shown string, keeping its geometry even if a glyph is unreadable. */
 export function fontText(
   font: Font,
   bytes: Uint8Array,
-): { text: string; advance: number; codes: number } {
+): {
+  text: string;
+  unreadable: boolean;
+  advance: number;
+  codes: number;
+  spaces: number;
+} {
   let text = '';
+  let unreadable = bytes.length % font.bytes !== 0;
   let advance = 0;
   let codes = 0;
+  let spaces = 0;
   for (let i = 0; i + font.bytes <= bytes.length; i += font.bytes) {
     const code =
       font.bytes === 2
         ? ((bytes[i] as number) << 8) | (bytes[i + 1] as number)
         : (bytes[i] as number);
     const mapped = font.toUnicode?.get(code);
-    if (mapped !== undefined) text += mapped;
-    else if (font.bytes === 1 && !font.toUnicode)
-      text += String.fromCharCode(code);
-    else text += '\ufffd';
+    const decoded =
+      mapped && !UNREADABLE.test(mapped) ? mapped : font.fallback(code);
+    if (decoded && !UNREADABLE.test(decoded)) text += decoded;
+    else unreadable = true;
+    if (font.bytes === 1 && code === 32) spaces++;
     advance += font.width(code);
     codes++;
   }
-  return { text, advance, codes };
+  return { text, unreadable, advance, codes, spaces };
 }

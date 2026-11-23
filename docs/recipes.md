@@ -88,6 +88,8 @@ drawing-axi labels plan.pdf --sizes
 
 `--full` adds the text as the file stores it, wherever decoding changed it.
 
+If `text_status` says font text is unreadable, some or all font labels on that page are missing from the results. Readable labels still appear. Ask for a PDF re-exported with selectable text before relying on a missing label or size.
+
 ## The scale looks wrong
 
 ```sh

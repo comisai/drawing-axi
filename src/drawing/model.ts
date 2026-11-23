@@ -70,6 +70,8 @@ export interface Sheet {
   strokes: Stroke[];
   fills: Fill[];
   labels: Label[];
+  /** Font labels left out because a shown glyph could not be decoded. */
+  unreadableText: number;
   images: number;
   /** Where pictures are drawn, clipped to the sheet; at most a few thousand. */
   pictures: Box[];

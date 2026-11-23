@@ -99,7 +99,14 @@ export function labels(input: CommandInput): string {
     sheet.labels,
     input.values.sizes === true,
   );
-  const head: Row = { file: name, also: hiddenNote };
+  const fontTextStatus = sheet.unreadableText
+    ? {
+        text_status: sheet.labels.some((l) => l.source === 'text')
+          ? 'Some font text not readable in this PDF on the selected page. Ask for a PDF re-exported with selectable text.'
+          : 'Font text not readable in this PDF on the selected page. Ask for a PDF re-exported with selectable text.',
+      }
+    : {};
+  const head: Row = { file: name, also: hiddenNote, ...fontTextStatus };
   if (input.values.sizes === true) {
     // One row per way a size is written: with a system code, with a slope,
     // or alone. A size written alone belongs to a tag.
@@ -127,6 +134,7 @@ export function labels(input: CommandInput): string {
     );
     const saved = save(input.io, str(input.values, 'save'), {
       file: name,
+      ...fontTextStatus,
       sizes: rows,
     });
     return listOutput({
@@ -163,6 +171,7 @@ export function labels(input: CommandInput): string {
       }));
     const saved = save(input.io, str(input.values, 'save'), {
       file: name,
+      ...fontTextStatus,
       labels: rows,
     });
     const shown = full ? rows : rows.slice(0, limit);
@@ -205,6 +214,7 @@ export function labels(input: CommandInput): string {
     );
   const saved = save(input.io, str(input.values, 'save'), {
     file: name,
+    ...fontTextStatus,
     labels: rows,
   });
   const shown = full ? rows : rows.slice(0, limit);
