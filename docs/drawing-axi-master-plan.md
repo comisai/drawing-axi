@@ -46,6 +46,7 @@ Updated 2026-11-20.
 | Comis pack and skill | **Done** | comisai/comis#4517, merged 2026-11-20: the pack entry pinned to the published checksum, the skill, the decision record, the recorded provenance and the tests. The static gate and the pack stages passed on x64 and arm64 |
 | Other design offices | **Done** | Two more offices' drawings came with people's bills (A2). One plots like the first; its findings led to 0.1.2. The other sends prints through a PDF printer, which cannot be measured; the tool says so and asks for the CAD plot |
 | Edge cases | **Done** | Every command on truncated, byte-flipped, empty, encrypted and renamed files, a joined two-sheet file, a right-to-left file name and a 200-character name: each ends in a known error in about 0.1 s, or works. The joined file lost its layers; fixed in 0.1.3 |
+| Release 0.1.4 | **Prepared** | Recovers PDF labels with missing or unusable font text maps, including legacy Hebrew fonts. `labels` and its saved JSON report text the reader still cannot decode |
 
 ## 3. Workstreams
 

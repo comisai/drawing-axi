@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| Status | T1 to T30 done (2026-11-20): the tool, the release (0.1.0, then 0.1.1), the Comis pack and the live scenario. §7.3 lists the next version's work. |
+| Status | T1 to T30 done (2026-11-20): the tool, releases 0.1.0 to 0.1.3, the Comis pack and the live scenario. Version 0.1.4 is prepared for release. §7.3 lists the next version's work. |
 | Date | 2026-11-20 |
 | Design | `drawing-axi-design.md` |
 | Master plan | `drawing-axi-master-plan.md` (milestones, gates, owner actions) |
@@ -214,6 +214,7 @@ A fresh worker drafted a bill of quantities from a real level (a ceiling sheet a
 | Layers | Layers with no ink are not named; `info` has no `--save` | `layers --all`; `info --save` |
 | Picture | `render --labels` draws background font text at the size of its box | Cap the drawn text height |
 | Text | Text drawn as outlines cannot be read | Out of reach for now; `info` should say when a sheet has it |
+| Text | Some PDF fonts have missing or unusable character maps | Fixed in 0.1.4: use the font encoding to recover labels and report text that still cannot be decoded |
 
 Three more workers took real levels from two offices in 0.1.1, blind to the people's bills. Their notes led to 0.1.2:
 
