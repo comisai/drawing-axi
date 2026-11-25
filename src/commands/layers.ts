@@ -166,7 +166,7 @@ export function layers(input: CommandInput): string {
       ? byStyle
         ? [
             "Run `drawing-axi measure <file.pdf> --group <name>='<layer>@#rrggbb w0.70 solid'` with a row's layer as printed, one group per system",
-            "Run `drawing-axi render <file.pdf> --layer '<layer>@#rrggbb w0.70 solid' --out <file.svg>` to see what one line style draws",
+            "Run `drawing-axi render <file.pdf> --layer '<layer>@#rrggbb w0.70 solid' --out <file.png>` to see what one line style draws",
           ]
         : [
             ...(inkNote
@@ -177,7 +177,7 @@ export function layers(input: CommandInput): string {
                   'Run `drawing-axi layers <file.pdf> --split --match <layer>` when one layer shows more than one colour',
                 ]),
             'Run `drawing-axi measure <file.pdf> --group <name>=<layer> --group <name>=<layer>` to measure by pipe size, every system in one command',
-            'Run `drawing-axi render <file.pdf> --layer <layer> --out <file.svg>` to see what a layer draws',
+            'Run `drawing-axi render <file.pdf> --layer <layer> --out <file.png>` to see what a layer draws',
           ]
       : ['Run `drawing-axi layers <file.pdf>` without --match for every layer'],
   });

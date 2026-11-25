@@ -48,7 +48,7 @@ drawing-axi is used by AI agents, so its output is part of its interface. Follow
 - **Honest numbers:** a number is measured, or it is absent. Never fill in a size, a scale or a length the sheet does not state; report it as unsized or unknown, and say what would settle it. When a rule is a judgement (how far a label may sit from its run), make it a flag with a stated default, and print the setting with the result.
 - **Files are untrusted.** Bound everything a file can make large: bytes, decoded bytes, nesting, coordinates, labels. Text from a file goes through the text-safety layer in `src/output/text.ts`. Write invisible or bidirectional characters in source as `\u` escapes, never as literal characters.
 - **No network, no extra writes.** The tool reads the file it is given and writes only `--out` and `--save`.
-- **Dependencies:** the only runtime dependency is `@toon-format/toon`, pinned exactly. The PDF reader is this project's own code. Discuss any new dependency in an issue first.
+- **Dependencies:** the runtime dependencies are `@toon-format/toon` and `@resvg/resvg-js`, both pinned exactly. The PDF reader is this project's own code. Discuss any new dependency in an issue first.
 - **Wording:** messages, help and docs use short, plain English sentences.
 
 Add or update tests with every change. Tests start from a sheet whose answer is known: extend `test/fixtures/sample.ts` or draw a small sheet in the test with `test/fixtures/pdf.ts`, and state the expected number. When behaviour changes, update the README, the `--help` text and `docs/recipes.md`; if the Comis `drawing-takeoff` skill (in the Comis repository, `images/packs/apps/skills/drawing-takeoff/`) needs a change, say so in the pull request.
