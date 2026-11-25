@@ -39,17 +39,24 @@ drawing-axi info <file.pdf>               what a sheet holds: size, scale, layer
 drawing-axi scale <file.pdf>              the scale and how it was found
 drawing-axi legend <file.pdf>             legend lines paired with the layer and colour of their samples
 drawing-axi layers <file.pdf>             layers with the length of straight runs drawn on each
+drawing-axi layers <file.pdf> --split --by style
+                                          one row per colour, line width and dash: a sheet in greys
 drawing-axi labels <file.pdf>             the text on the sheet: legend, notes, sizes
 drawing-axi tags <file.pdf>               riser tags with the size written beside each
 drawing-axi runs <file.pdf> --layer L     the straight runs on chosen layers, with their ends
 drawing-axi measure <file.pdf> --group name=LAYER[+LAYER]...
                                           run length by group and pipe size
 drawing-axi symbols <file.pdf> --layer L  symbols counted by size and make-up
-drawing-axi render <file.pdf> --out f.svg a picture of chosen layers and area, to look at
-drawing-axi help <command>                flags for one command
+drawing-axi render <file.pdf> --out f.png a PNG preview of chosen layers and area
+drawing-axi help <command>                flags and saved JSON shape for one command
+drawing-axi help --all                    detailed help for every command in one call
 ```
 
 Positions are `x,y` in points from the top-left corner of the sheet, x to the right and y down. 72 points are one inch on paper.
+
+PNG previews preserve the region's aspect ratio within 1568 pixels on the long side. Use `--width` for a smaller image or `--out f.svg` for an SVG export. PNG text in `--labels` and `--grid` uses installed fonts.
+
+For commands with `--save`, the `saved_json` section of help lists the fields and types for each saved file. A `?` marks a field that can be absent.
 
 ### A takeoff, step by step
 
@@ -66,6 +73,7 @@ sheet: 494 x 317 mm
 scale: "1:100, 27.78 pt per m (stated ratio, refined by the scale bar)"
 layers: "9 with ink on this page, 9 in the file (1 switched off)"
 geometry: "243 strokes, 2 fills, 0 images"
+ink: "7 colours, 2 of them greys"
 labels: "24 stroke-font, 1 font text, 1 notes"
 size_labels: "9 (4 carry a slope or a system code, as a label on a pipe does)"
 ```
@@ -116,7 +124,7 @@ sized_by[3]{group,size,label,labelled_m,runs}:
 ### What the numbers mean
 
 - **Runs.** A pipe is plotted as dashes, and broken where a letter or a label sits on it. A run joins pieces that lie on one line and end near each other, and is measured end to end. A break with a linetype letter in it, such as the F of a fire line, is joined up to twice as wide. Some offices plot those letters as strokes on the pipe's layer; their bars join into a sparse line a point or two off the pipe, which is left out and counted in `settings`. When a group's runs would grow by a fifth at a gap half as wide again, `gaps` says so; `--group-gap NAME=MM` sets a gap for that group alone. Curved pipe and runs shorter than 6 mm on paper are left out.
-- **Scale.** The ratio comes from the title block. A plot is often a little off its stated scale, so the factor is refined from the printed scale bar when one is found. `drawing-axi scale` shows both. Pass `--scale 1:N` or `--pt-per-m` when the sheet is wrong or silent.
+- **Scale.** The ratio comes from the title block. A scale bar can refine it by up to 2%. A larger difference needs confirmation from a separate dimension. `drawing-axi scale` shows the factor used, why it was chosen, and the bar's length in points, printed label when readable, and implied factor. Pass `--scale 1:N` or `--pt-per-m` when the sheet is wrong or silent.
 - **Sizes.** A run takes the size of a label written along it: just beside the line, or in a break left in the line for it. A line that passes through the middle of a label's text is another pipe, and takes nothing. A run without a label takes the size of the runs of its own group that it touches, when they all agree. `labelled_m` is the part sized by a label of its own.
 - **System codes.** A label such as `F-Ø4"` or `CW1-Ø3"` starts with its system's code. Name a group by that code (`--group F=<layer>`, `--group CW=<layer>`) and it takes only those labels and sizes written alone, never a slope label such as `Ø160-1%`, which is a gravity pipe's. No other group takes its labels. The code is the letters before the first digit, dots left out: `C.W.2` is `CW`, `OD7A` is `OD`. A label written in a break of a line still sizes that line, whatever its group is called. A coded label that sits on no run, as one on a leader does, is listed under `labels_apart`: the sheet names that size for the system, and does not say which pipe. It is a size to confirm, not a measured one.
 - **Unsized.** What no label sizes is reported as `unsized`. The tool never guesses a size. `size_labels` says how many more labels a reach twice as wide would place, for an office that writes its sizes a few millimetres off the pipe. `--plain` adds sizes written alone, such as `Ø63`, that no riser tag claims.

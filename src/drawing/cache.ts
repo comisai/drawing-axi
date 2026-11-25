@@ -41,7 +41,7 @@ import type {
 } from './model.ts';
 
 /** Raised when the layout of an entry changes. */
-const FORMAT = 1;
+const FORMAT = 2;
 const MAGIC = 0x53584144; // "DAXS" read little-endian.
 const HEADER = 48;
 /** All entries together stay under this many bytes by default. */
@@ -254,6 +254,8 @@ interface Text {
   layers: Layer[];
   labels: Array<[string, string, LabelSource]>;
   skipped: string[];
+  /** Each dash pattern once; a stroke keeps the index of its own. */
+  dashes: string[];
 }
 
 /** Where an entry's bytes go, in order: memory or a file. */
@@ -394,10 +396,26 @@ const pointsOf = (sheet: Sheet): number => {
 };
 
 function writeSheet(sheet: Sheet, w: Writer): void {
+  // Filled in plain loops: a typed array made with a mapping function is
+  // many times slower, and a large sheet has hundreds of thousands of rows.
+  const strokes = sheet.strokes;
+  const ns = strokes.length;
+  const dashes = new Map<string, number>();
+  const dash = new Uint32Array(ns);
+  for (let i = 0; i < ns; i++) {
+    const pattern = (strokes[i] as Stroke).dash;
+    let index = dashes.get(pattern);
+    if (index === undefined) {
+      index = dashes.size;
+      dashes.set(pattern, index);
+    }
+    dash[i] = index;
+  }
   const text: Text = {
     layers: sheet.layers,
     labels: sheet.labels.map((l) => [l.text, l.raw, l.source]),
     skipped: sheet.skipped,
+    dashes: [...dashes.keys()],
   };
   w.text(text);
   w.column(
@@ -411,24 +429,18 @@ function writeSheet(sheet: Sheet, w: Writer): void {
       sheet.pictureShare,
     ]),
   );
-  // Filled in plain loops: a typed array made with a mapping function is
-  // many times slower, and a large sheet has hundreds of thousands of rows.
-  const strokes = sheet.strokes;
-  const ns = strokes.length;
   const layer = new Int32Array(ns);
   const color = new Uint32Array(ns);
   const width = new Float64Array(ns);
-  const dashed = new Uint8Array(ns);
   const lengths = new Uint32Array(ns);
   for (let i = 0; i < ns; i++) {
     const s = strokes[i] as Stroke;
     layer[i] = s.layer;
     color[i] = s.color;
     width[i] = s.width;
-    dashed[i] = s.dashed ? 1 : 0;
     lengths[i] = s.pts.length;
   }
-  for (const column of [layer, color, width, dashed, lengths]) w.column(column);
+  for (const column of [layer, color, width, dash, lengths]) w.column(column);
   // The points, the bulk of an entry, through a buffer of a megabyte, so a
   // large sheet is not copied whole once more.
   const total = pointsOf(sheet);
@@ -502,7 +514,9 @@ function readPayload(r: Reader): Sheet | null {
   if (
     !Array.isArray(text?.layers) ||
     !Array.isArray(text.labels) ||
-    !Array.isArray(text.skipped)
+    !Array.isArray(text.skipped) ||
+    !Array.isArray(text.dashes) ||
+    !text.dashes.every((d) => typeof d === 'string')
   )
     return null;
   const [page, pages, width, height, unreadableText, images, pictureShare] =
@@ -511,11 +525,12 @@ function readPayload(r: Reader): Sheet | null {
   const layer = r.i32(strokeCount);
   const color = r.ints(strokeCount);
   const strokeWidth = r.f64(strokeCount);
-  const dashed = r.bytes(strokeCount);
+  const dash = r.ints(strokeCount);
   const lengths = r.ints(strokeCount);
   let total = 0;
   for (const n of lengths) total += n;
   const all = r.f64(total);
+  for (const d of dash) if (d >= text.dashes.length) return null;
   const strokes: Stroke[] = new Array(strokeCount);
   let at = 0;
   for (let i = 0; i < strokeCount; i++) {
@@ -528,7 +543,7 @@ function readPayload(r: Reader): Sheet | null {
       layer: layer[i] as number,
       color: color[i] as number,
       width: strokeWidth[i] as number,
-      dashed: dashed[i] === 1,
+      dash: text.dashes[dash[i] as number] as string,
       pts,
     };
   }

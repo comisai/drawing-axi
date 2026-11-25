@@ -8,10 +8,13 @@ import { sizeLabels } from '../drawing/sizes.ts';
 import { AxiError } from '../errors.ts';
 import { type Row, recordOutput } from '../output/views.ts';
 import {
+  inkOf,
+  inkText,
   openSheet,
   PICTURED,
   percent,
   round,
+  STYLE_SPLIT,
   save,
   scaleOf,
   sheetSize,
@@ -25,9 +28,11 @@ function basisText(scale: Scale): string {
       ? 'points per metre given by flag'
       : 'given ratio; no scale bar found';
   const ratio = scale.given ? 'given ratio' : 'stated ratio';
-  return scale.basis === 'bar'
-    ? `${ratio}, refined by the scale bar`
-    : `${ratio}; no scale bar found`;
+  if (scale.basis === 'bar')
+    return `${ratio}, refined by the scale bar${scale.bar?.dimensionLabel ? ' and confirmed by a dimension' : ''}`;
+  if (scale.bar)
+    return `${ratio} used because the bar differs by more than 2% and has no confirming dimension`;
+  return `${ratio}; no scale bar found`;
 }
 
 /** "1:100, 27.98 pt per m (stated ratio, refined by the scale bar)". */
@@ -68,14 +73,16 @@ export function info(input: CommandInput): string {
       `Pictures cover ${percent(sheet.pictureShare)} of this page: the drawing is a picture. A pipe drawn in a picture is not a line, so it is not measured, and \`render\` shows only where the pictures are. Ask for the PDF plotted from the CAD file, not a print of it.`,
     );
   else if (!sheet.strokes.length) notes.push('This page holds no lines.');
+  // With no layers to go by, systems are told apart by colour; on a sheet in
+  // greys colour will not do it, and line width and dash may.
+  const ink = inkOf(sheet.strokes);
+  const apart = ink.greyscale
+    ? `Its ink is ${inkText(ink)}, so colour will not tell systems apart. Tell them apart by line width and dash: \`${STYLE_SPLIT}\`.`
+    : 'Tell systems apart by colour: `drawing-axi layers <file.pdf> --split`.';
   if (!pictured && sheet.strokes.length && sheet.layers.length && !used)
-    notes.push(
-      'No line on this page is on a layer. Tell systems apart by colour: `drawing-axi layers <file.pdf> --split`.',
-    );
+    notes.push(`No line on this page is on a layer. ${apart}`);
   if (!pictured && sheet.strokes.length && !sheet.layers.length)
-    notes.push(
-      'The file keeps no layers. Tell systems apart by colour: `drawing-axi layers <file.pdf> --split`.',
-    );
+    notes.push(`The file keeps no layers. ${apart}`);
   if (sheet.strokes.length && !sheet.labels.length)
     notes.push(
       'The file keeps no text. Sizes and names must come from looking at the sheet: `drawing-axi render`.',
@@ -93,6 +100,7 @@ export function info(input: CommandInput): string {
     scale,
     layers: `${used} with ink on this page, ${sheet.layers.length} in the file${hidden ? ` (${hidden} switched off)` : ''}`,
     geometry: `${sheet.strokes.length} strokes, ${sheet.fills.length} fills, ${sheet.images} images`,
+    ...(sheet.strokes.length ? { ink: inkText(ink) } : {}),
     ...(sheet.images
       ? {
           pictures: `${sheet.images}, covering ${percent(sheet.pictureShare)} of the page`,
@@ -128,9 +136,14 @@ export function scale(input: CommandInput): string {
     scale_bar: found.bar
       ? `${found.bar.metres} m in ${found.bar.cells} cells at x=${Math.round(found.bar.x)} y=${Math.round(found.bar.y)}`
       : null,
+    scale_bar_length_pt: found.bar && round(found.bar.lengthPt, 3),
+    scale_bar_label: found.bar?.label,
+    scale_bar_pt_per_m: found.bar && round(found.bar.ptPerM, 3),
+    scale_bar_difference_pct: found.bar?.differencePct,
+    scale_dimension_label: found.bar?.dimensionLabel,
     plotted_at:
       Math.abs(factor - 1) > 0.002
-        ? `${round(factor * 100, 1)}% of the stated scale`
+        ? `${round(factor * 100, 1)}% of the ${found.given ? 'given' : 'stated'} scale`
         : null,
     stated: found.stated.map((r) => `1:${r}`).join(', ') || 'none',
     sheet_covers: `${round(sheet.width / found.ptPerM, 1)} x ${round(sheet.height / found.ptPerM, 1)} m`,

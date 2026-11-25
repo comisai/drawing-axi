@@ -24,6 +24,7 @@ import { readSheet } from '../../src/drawing/extract.ts';
 import type { Sheet } from '../../src/drawing/model.ts';
 import { PdfDocument } from '../../src/pdf/document.ts';
 import {
+  greyDrawing,
   oddDrawing,
   pictureDrawing,
   sampleDrawing,
@@ -36,6 +37,10 @@ const sheets = (): Array<[string, Sheet]> => [
   ['a rotated sheet', sampleSheet({ rotate: 90 })],
   ['an odd sheet', readSheet(PdfDocument.open(oddDrawing()), 0)],
   ['a picture page', readSheet(PdfDocument.open(pictureDrawing()), 0)],
+  [
+    'a grey sheet with solid and dashed lines',
+    readSheet(PdfDocument.open(greyDrawing(200)), 0),
+  ],
 ];
 
 const entries = (dir: string) =>
@@ -58,6 +63,16 @@ describe('Cache: a kept sheet reads back the same', () => {
     assert.ok(back);
     assert.ok(Object.is(back.strokes[0]?.pts[0], -0));
     assert.deepEqual(back, sheet);
+  });
+
+  it('keeps the dash pattern of each stroke', () => {
+    const sheet = readSheet(PdfDocument.open(greyDrawing(200)), 0);
+    const dashes = new Set(sheet.strokes.map((s) => s.dash));
+    assert.ok(dashes.size >= 2, 'the grey sheet has solid and dashed lines');
+    assert.deepEqual(
+      decodeSheet(encodeSheet(sheet))?.strokes.map((s) => s.dash),
+      sheet.strokes.map((s) => s.dash),
+    );
   });
 
   it('refuses a damaged or cut entry instead of reading it', () => {

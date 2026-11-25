@@ -113,7 +113,36 @@ interface GState {
   stroke: number;
   fill: number;
   width: number;
-  dashed: boolean;
+  /** The dash array in user space; empty for a solid line. */
+  dash: readonly number[];
+}
+
+/** The most entries of a dash array that are kept; real linetypes use few. */
+const MAX_DASH = 8;
+/** The longest dash or gap kept, in points; longer ones are cut to it. */
+const MAX_DASH_PT = 100_000;
+const SOLID: readonly number[] = [];
+
+/**
+ * A dash array as a list of lengths, or empty when it draws a solid line:
+ * when it is empty, all zeros, or holds a length that is not a real one.
+ */
+function dashArray(items: readonly unknown[]): readonly number[] {
+  const values = items.slice(0, MAX_DASH).map(num);
+  if (
+    values.some((v) => !(v >= 0) || !Number.isFinite(v)) ||
+    !values.some((v) => v > 0)
+  )
+    return SOLID;
+  return values;
+}
+
+/** "6-3": a dash array scaled to the sheet, each length to a tenth of a point. */
+function dashText(dash: readonly number[], scale: number): string {
+  if (!dash.length) return '';
+  return dash
+    .map((v) => String(Math.round(Math.min(v * scale, MAX_DASH_PT) * 10) / 10))
+    .join('-');
 }
 
 interface TextState {
@@ -417,6 +446,7 @@ export function readSheet(
       const scale = Math.sqrt(
         Math.abs(gs.ctm[0] * gs.ctm[3] - gs.ctm[1] * gs.ctm[2]),
       );
+      const dash = dashText(gs.dash, scale);
       for (const pts of subpaths) {
         if (pts.length < 4) continue;
         let sane = true;
@@ -433,7 +463,7 @@ export function readSheet(
             layer,
             color: gs.stroke,
             width: gs.width * scale,
-            dashed: gs.dashed,
+            dash,
             pts,
           });
         if (fill && pts.length >= 6) {
@@ -646,7 +676,7 @@ export function readSheet(
           gs.width = num(a[0]);
           break;
         case 'd':
-          gs.dashed = Array.isArray(a[0]) && a[0].some((v) => num(v) > 0);
+          gs.dash = Array.isArray(a[0]) ? dashArray(a[0]) : SOLID;
           break;
         case 'gs': {
           const states = doc.dict(resources.get('ExtGState'));
@@ -656,7 +686,7 @@ export function readSheet(
           if (typeof lw === 'number') gs.width = lw;
           const dash = doc.array(state?.get('D'));
           if (dash.length)
-            gs.dashed = doc.array(dash[0]).some((v) => num(doc.resolve(v)) > 0);
+            gs.dash = dashArray(doc.array(dash[0]).map((v) => doc.resolve(v)));
           break;
         }
         case 'G':
@@ -855,7 +885,7 @@ export function readSheet(
     stroke: 0,
     fill: 0,
     width: 1,
-    dashed: false,
+    dash: SOLID,
   };
   run(doc.pageContent(page), page.resources, start, -1, 0);
 

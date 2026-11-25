@@ -9,7 +9,7 @@ drawing-axi info plan.pdf
 drawing-axi info plan.pdf --page 2
 ```
 
-A PDF page is one sheet; every command takes `--page`. Read `layers`, `labels` and `scale`. `notes` appears only when something is missing. A scan says "This page is a picture". A print whose drawing is picture tiles says "Pictures cover 100% of this page: the drawing is a picture"; ask for the CAD plot, since the lines it does hold are only what was drawn over the pictures. A sheet with no layers says to split by colour. Do not measure a sheet whose scale is "not stated" without `--scale`.
+A PDF page is one sheet; every command takes `--page`. Read `layers`, `labels` and `scale`. `notes` appears only when something is missing. A scan says "This page is a picture". A print whose drawing is picture tiles says "Pictures cover 100% of this page: the drawing is a picture"; ask for the CAD plot, since the lines it does hold are only what was drawn over the pictures. `ink` says which colours the lines are drawn in. A sheet with no layers says to split by colour, or, when its ink is all greys, by line width and dash. Do not measure a sheet whose scale is "not stated" without `--scale`.
 
 ## Which layer is which system?
 
@@ -48,17 +48,17 @@ drawing-axi measure plan.pdf \
 - `size_labels` says when a wider `--reach` would place more labels; try it, then check `sized_by`.
 - If `labels --sizes` shows many sizes with no code and no slope, and the sheet writes sizes beside its pipes, `--plain` uses those that no riser tag claims. Check `sized_by`.
 - The saved file lists every label that found no run (`unplaced`) with its place, and the layers of each group.
+- Run `drawing-axi help measure` for the saved JSON fields and types, or `drawing-axi help --all` for the full command reference.
 - `unsized` rows are pipe with no label along it. Size them from riser tags or the legend, with the owner. Never guess.
 
 ## Where is that run?
 
 ```sh
 drawing-axi runs plan.pdf --layer SEWER --limit 5
-drawing-axi render plan.pdf --layer SEWER --region 50,150,700,650 --labels --grid --out crop.svg
-resvg crop.svg crop.png
+drawing-axi render plan.pdf --layer SEWER --region 50,150,700,650 --labels --grid --out crop.png
 ```
 
-Then look at `crop.png`. The grid's numbers are the same coordinates the commands print.
+Then look at `crop.png`. Its long side is at most 1568 pixels. The grid's numbers are the same coordinates the commands print.
 
 ## How many risers of each size?
 
@@ -73,7 +73,7 @@ A tag is an identifier with a size beside it. What a series letter means is in t
 
 ```sh
 drawing-axi symbols plan.pdf --layer SYMBOLS
-drawing-axi render plan.pdf --layer SYMBOLS --region 380,300,600,400 --out symbols.svg
+drawing-axi render plan.pdf --layer SYMBOLS --region 380,300,600,400 --out symbols.png
 ```
 
 `symbols` counts groups of the same size and make-up, each layer on its own. It does not know what they are: render one `first_at` and look. `--save` writes the place of every symbol.
@@ -98,6 +98,8 @@ drawing-axi measure plan.pdf --layer SEWER --scale 1:50
 drawing-axi measure plan.pdf --layer SEWER --pt-per-m 27.78
 ```
 
+`pt_per_m` is the factor the measuring commands use. Compare it with `scale_bar_pt_per_m`, which comes from the bar's measured length in `scale_bar_length_pt` and its distance in metres. `scale_bar_label` shows the printed label when found. If the bar has no readable label with units, the distance in metres is inferred from the nominal ratio and the measured length. A bar that differs by more than 2% needs a separate drawn dimension to confirm it. The check looks for a horizontal or vertical dimension with a label in m, cm, or mm and a line crossing each end. Its factor must agree with the bar within 1%.
+
 To measure the factor yourself, take two points a known distance apart from `runs` or `labels --each`: points between them, divided by the metres, is `--pt-per-m`.
 
 ## A file is refused
@@ -118,3 +120,12 @@ drawing-axi runs plan.pdf --page 2 --layer '(no layer)'
 ```
 
 Ink that is on no layer is listed as `(no layer)`, and can be measured by that name.
+
+## A sheet in greys
+
+```sh
+drawing-axi layers plan.pdf --page 2 --split --by style
+drawing-axi measure plan.pdf --page 2 --layer '(no layer)@#000000 w1.00 solid'
+```
+
+Some offices plot with no layers and in greys only, so colour does not tell systems apart either. Two systems in one grey still differ by line width or dash. `--split --by style` gives one row per layer, colour, line width and dash, named as the measuring commands take it: `(no layer)@#666666 w0.70 solid`, `(no layer)@#666666 w0.35 dash6-3`. The width is in points, to a hundredth; the dash is the pattern's on and off lengths in points. Pass a row's name to `measure`, `runs`, `symbols` or `render` with `--layer`, or in a `--group`; quote it, since it holds spaces. Part of a style picks more: `w0.35` alone takes every dash at that width, and `dashed` or `solid` alone takes every width. Look (`render`) before you trust a style to be one system: a CAD program may plot a linetype as separate solid dashes, and then that line shows as solid.

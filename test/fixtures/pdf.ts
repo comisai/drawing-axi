@@ -87,6 +87,18 @@ export class Content {
     return this;
   }
 
+  /** Stroke in a grey from 0 (black) to 1 (white), at a line width in points. */
+  grey(level: number, width = 1): this {
+    this.ops.push({ kind: 'raw', text: `${num(level)} G ${width} w` });
+    return this;
+  }
+
+  /** A dash pattern in points for the strokes that follow; none is solid. */
+  dash(pattern: number[] = []): this {
+    this.ops.push({ kind: 'raw', text: `[${pattern.map(num).join(' ')}] 0 d` });
+    return this;
+  }
+
   line(x0: number, y0: number, x1: number, y1: number): this {
     this.ops.push({
       kind: 'path',

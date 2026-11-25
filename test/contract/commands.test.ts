@@ -2,9 +2,10 @@
 // DRAWING_AXI_BIN=dist to run the built package instead of the source.
 
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { before, describe, it } from 'node:test';
+import { buildPdf, Content } from '../fixtures/pdf.ts';
 import { EXPECT, PLAN, REVIEW_NOTE } from '../fixtures/sample.ts';
 import {
   body,
@@ -12,6 +13,7 @@ import {
   type Ran,
   rowsOf,
   runBinary,
+  tempDir,
 } from '../helpers.ts';
 
 let dir: string;
@@ -129,10 +131,102 @@ describe('info and scale', () => {
     assert.equal(doc.pt_per_m, 27.78);
     assert.equal(doc.plotted_at, '98% of the stated scale');
     assert.match(String(doc.scale_bar), /^10 m in 10 cells at x=1090 y=820$/);
+    assert.equal(doc.scale_bar_length_pt, 277.795);
+    assert.equal(doc.scale_bar_label, undefined);
     const given = await ok('scale', 'plan.pdf', '--pt-per-m', '30');
     assert.equal(given.pt_per_m, 30);
     assert.equal(given.basis, 'points per metre given by flag');
   });
+
+  for (const {
+    name,
+    dimension,
+    ticks,
+    refined,
+    barLabel = '10 m',
+    barFactor = 27.213,
+    difference = -4,
+  } of [
+    { name: 'no dimension', dimension: null, ticks: false, refined: false },
+    {
+      name: 'a plain length label',
+      dimension: '6 m',
+      ticks: false,
+      refined: false,
+      barLabel: '10',
+    },
+    {
+      name: 'a dimension that disagrees with the bar',
+      dimension: '5.76 m',
+      ticks: true,
+      refined: false,
+    },
+    {
+      name: 'a dimension that confirms the bar',
+      dimension: '6000 mm',
+      ticks: true,
+      refined: true,
+    },
+    {
+      name: 'a printed distance that implies a larger scale',
+      dimension: null,
+      ticks: false,
+      refined: false,
+      barLabel: '9.25 m',
+      barFactor: 29.419,
+      difference: 3.78,
+    },
+  ]) {
+    it(`explains a scale bar discrepancy with ${name}`, async () => {
+      const nominal = (72 / 25.4) * 10;
+      const cell = nominal * 0.96;
+      const end = 30 + 10 * cell;
+      const c = new Content().text('SCALE 1:100', 30, 30);
+      c.line(30, 65, end, 65).line(30, 71, end, 71);
+      for (let i = 0; i < 10; i += 2) {
+        for (const offset of [0.25, 0.5, 0.75]) {
+          const x = 30 + (i + offset) * cell;
+          c.line(x, 66, x, 70);
+        }
+      }
+      c.text('5 m', 30 + 5 * cell, 60).text(barLabel, end - 7, 60);
+      c.layer('PIPE')
+        .line(30, 100, 30 + 5 * nominal, 100)
+        .end();
+      if (dimension) {
+        const dimensionEnd = 30 + 6 * cell;
+        c.line(30, 145, dimensionEnd, 145).text(dimension, 95, 141);
+        if (ticks)
+          c.line(30, 140, 30, 152).line(dimensionEnd, 140, dimensionEnd, 152);
+      }
+      const file = join(tempDir(), 'scale-bar.pdf');
+      writeFileSync(file, buildPdf([{ width: 360, height: 210, content: c }]));
+      const doc = await ok('scale', file);
+      assert.equal(doc.scale, '1:100');
+      assert.equal(doc.pt_per_m, refined ? 27.213 : 28.346);
+      assert.equal(doc.scale_bar_length_pt, 272.126);
+      assert.equal(doc.scale_bar_label, barLabel);
+      assert.equal(doc.scale_bar_pt_per_m, barFactor);
+      assert.equal(doc.scale_bar_difference_pct, difference);
+      assert.equal(
+        doc.plotted_at,
+        refined ? '96% of the stated scale' : undefined,
+      );
+      assert.match(
+        String(doc.basis),
+        refined
+          ? /confirmed by a dimension/
+          : /stated ratio used because the bar differs by more than 2% and has no confirming dimension/,
+      );
+      assert.equal(doc.scale_dimension_label, refined ? dimension : undefined);
+      const measured = await ok('measure', file, '--layer', 'PIPE');
+      assert.match(
+        String(measured.scale),
+        refined ? /27\.21 pt per m/ : /28\.35 pt per m/,
+      );
+      assert.equal(rowsOf(measured, 'groups')[0]?.length_m, refined ? 5.2 : 5);
+    });
+  }
 });
 
 describe('layers and legend', () => {
@@ -440,6 +534,80 @@ describe('symbols and render', () => {
     await ok('render', 'plan.pdf', '--out', 'crop.svg', '--force');
     assert.ok(existsSync(join(dir, 'crop.svg')));
   });
+
+  it('writes PNG previews with a 1568 px long side in either orientation', async () => {
+    for (const [file, region, width, height] of [
+      ['wide.PNG', '50,150,700,650', 1568, 1206],
+      ['tall.png', '50,150,550,800', 1206, 1568],
+      ['small.png', '50,150,700,650', 130, 100],
+    ] as const) {
+      const args = [
+        'render',
+        'plan.pdf',
+        '--layer',
+        'SEWER',
+        '--region',
+        region,
+        '--labels',
+        '--grid',
+        '--width',
+        file === 'small.png' ? '130' : '8000',
+        '--out',
+        file,
+      ];
+      const doc = await ok(...args);
+      const png = readFileSync(join(dir, file));
+      assert.equal(png.subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
+      assert.equal(png.toString('ascii', 12, 16), 'IHDR');
+      assert.equal(png.readUInt32BE(16), width);
+      assert.equal(png.readUInt32BE(20), height);
+      assert.equal(doc.picture, `${width} x ${height} px, ${png.length} bytes`);
+      assert.match(
+        String(doc.shows),
+        /^1 layer, [1-9]\d* strokes?, [1-9]\d* labels?$/,
+      );
+      assert.doesNotMatch(JSON.stringify(doc.help), /resvg/);
+    }
+    await fails('exists', 1, 'render', 'plan.pdf', '--out', 'tall.png');
+    await ok('render', 'plan.pdf', '--out', 'tall.png', '--force');
+  });
+});
+
+describe('help reference', () => {
+  it('shows the same detailed help for every command in a single TOON document', async () => {
+    const top = await ok('help');
+    const all = await ok('help', '--all');
+    const commands = rowsOf(all, 'commands');
+    assert.deepEqual(
+      commands.map((entry) => entry.command),
+      rowsOf(top, 'commands').map((entry) => entry.command),
+    );
+    for (const entry of commands.slice(1)) {
+      const name = String(entry.command).replace(/^drawing-axi /, '');
+      const single = await ok('help', name);
+      assert.deepEqual(entry, single);
+      if (
+        rowsOf(single, 'flags').some((f) =>
+          String(f.flag).startsWith('--save '),
+        )
+      ) {
+        assert.ok(single.saved_json, name);
+      }
+    }
+    await fails('usage', 2, 'help', 'render', '--all');
+  });
+
+  it('documents the differing JSON shapes and optional fields', async () => {
+    const measure = (await ok('help', 'measure')).saved_json;
+    const runs = (await ok('help', 'runs')).saved_json;
+    const labels = (await ok('help', 'labels')).saved_json;
+    assert.match(JSON.stringify(measure), /from: \[number, number\]/);
+    assert.match(JSON.stringify(measure), /size: string \| null/);
+    assert.match(JSON.stringify(runs), /from: string/);
+    assert.match(JSON.stringify(labels), /--sizes/);
+    assert.match(JSON.stringify(labels), /--each/);
+    assert.match(JSON.stringify(labels), /stored\?: string \| null/);
+  });
 });
 
 describe('errors', () => {
@@ -515,7 +683,18 @@ describe('errors', () => {
     );
     await fails('usage', 2, 'symbols', 'plan.pdf');
     await fails('usage', 2, 'render', 'plan.pdf');
-    await fails('usage', 2, 'render', 'plan.pdf', '--out', 'picture.png');
+    await fails('usage', 2, 'render', 'plan.pdf', '--out', 'picture.jpg');
+    await fails(
+      'usage',
+      2,
+      'render',
+      'plan.pdf',
+      '--out',
+      'oversized.png',
+      '--grid',
+      '--region',
+      `0,0,${'9'.repeat(400)},100`,
+    );
   });
 
   it('stops at the deadline it is given', async () => {
