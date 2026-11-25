@@ -25,9 +25,11 @@ function basisText(scale: Scale): string {
       ? 'points per metre given by flag'
       : 'given ratio; no scale bar found';
   const ratio = scale.given ? 'given ratio' : 'stated ratio';
-  return scale.basis === 'bar'
-    ? `${ratio}, refined by the scale bar`
-    : `${ratio}; no scale bar found`;
+  if (scale.basis === 'bar')
+    return `${ratio}, refined by the scale bar${scale.bar?.dimensionLabel ? ' and confirmed by a dimension' : ''}`;
+  if (scale.bar)
+    return `${ratio} used because the bar differs by more than 2% and has no confirming dimension`;
+  return `${ratio}; no scale bar found`;
 }
 
 /** "1:100, 27.98 pt per m (stated ratio, refined by the scale bar)". */
@@ -128,9 +130,14 @@ export function scale(input: CommandInput): string {
     scale_bar: found.bar
       ? `${found.bar.metres} m in ${found.bar.cells} cells at x=${Math.round(found.bar.x)} y=${Math.round(found.bar.y)}`
       : null,
+    scale_bar_length_pt: found.bar && round(found.bar.lengthPt, 3),
+    scale_bar_label: found.bar?.label,
+    scale_bar_pt_per_m: found.bar && round(found.bar.ptPerM, 3),
+    scale_bar_difference_pct: found.bar?.differencePct,
+    scale_dimension_label: found.bar?.dimensionLabel,
     plotted_at:
       Math.abs(factor - 1) > 0.002
-        ? `${round(factor * 100, 1)}% of the stated scale`
+        ? `${round(factor * 100, 1)}% of the ${found.given ? 'given' : 'stated'} scale`
         : null,
     stated: found.stated.map((r) => `1:${r}`).join(', ') || 'none',
     sheet_covers: `${round(sheet.width / found.ptPerM, 1)} x ${round(sheet.height / found.ptPerM, 1)} m`,

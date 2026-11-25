@@ -98,6 +98,8 @@ drawing-axi measure plan.pdf --layer SEWER --scale 1:50
 drawing-axi measure plan.pdf --layer SEWER --pt-per-m 27.78
 ```
 
+`pt_per_m` is the factor the measuring commands use. Compare it with `scale_bar_pt_per_m`, which comes from the bar's measured length in `scale_bar_length_pt` and its distance in metres. `scale_bar_label` shows the printed label when found. If the bar has no readable label with units, the distance in metres is inferred from the nominal ratio and the measured length. A bar that differs by more than 2% needs a separate drawn dimension to confirm it. The check looks for a horizontal or vertical dimension with a label in m, cm, or mm and a line crossing each end. Its factor must agree with the bar within 1%.
+
 To measure the factor yourself, take two points a known distance apart from `runs` or `labels --each`: points between them, divided by the metres, is `--pt-per-m`.
 
 ## A file is refused
