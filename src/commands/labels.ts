@@ -189,7 +189,7 @@ export function labels(input: CommandInput): string {
       narrower: 'drawing-axi labels <file.pdf> --each --region <x0,y0,x1,y1>',
       help: rows.length
         ? [
-            'Run `drawing-axi render <file.pdf> --region <x0,y0,x1,y1> --labels --out <file.svg>` to see a label in its place',
+            'Run `drawing-axi render <file.pdf> --region <x0,y0,x1,y1> --labels --out <file.png>` to see a label in its place',
           ]
         : [
             'Run `drawing-axi labels <file.pdf>` without filters for every label',
