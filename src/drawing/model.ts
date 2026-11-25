@@ -15,8 +15,11 @@ export interface Stroke {
   color: number;
   /** Line width in points. */
   width: number;
-  /** Drawn with a dash pattern, so its gaps are not gaps in the object. */
-  dashed: boolean;
+  /**
+   * The dash pattern in points on the sheet, as on and off lengths joined by
+   * dashes ("6-3"), or empty for a solid line.
+   */
+  dash: string;
   /** x0, y0, x1, y1, ... along the polyline. */
   pts: number[];
 }
@@ -101,3 +104,20 @@ export function parseColor(text: string): number | null {
 }
 
 export const MM_PER_PT = 25.4 / 72;
+
+/** A line width to the hundredth of a point, the step line styles are told apart by. */
+export const widthKey = (width: number): number => Math.round(width * 100);
+
+/** "w0.70 solid" or "w0.35 dash6-3": a stroke's width in points and its dash. */
+export const styleText = (stroke: Stroke): string =>
+  `w${(widthKey(stroke.width) / 100).toFixed(2)} ${stroke.dash ? `dash${stroke.dash}` : 'solid'}`;
+
+/** A colour whose red, green and blue are within this much of each other is a grey. */
+const GREY_SPREAD = 6;
+
+export function isGrey(color: number): boolean {
+  const r = (color >> 16) & 255;
+  const g = (color >> 8) & 255;
+  const b = color & 255;
+  return Math.max(r, g, b) - Math.min(r, g, b) <= GREY_SPREAD;
+}

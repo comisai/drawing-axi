@@ -39,6 +39,8 @@ drawing-axi info <file.pdf>               what a sheet holds: size, scale, layer
 drawing-axi scale <file.pdf>              the scale and how it was found
 drawing-axi legend <file.pdf>             legend lines paired with the layer and colour of their samples
 drawing-axi layers <file.pdf>             layers with the length of straight runs drawn on each
+drawing-axi layers <file.pdf> --split --by style
+                                          one row per colour, line width and dash: a sheet in greys
 drawing-axi labels <file.pdf>             the text on the sheet: legend, notes, sizes
 drawing-axi tags <file.pdf>               riser tags with the size written beside each
 drawing-axi runs <file.pdf> --layer L     the straight runs on chosen layers, with their ends
@@ -71,6 +73,7 @@ sheet: 494 x 317 mm
 scale: "1:100, 27.78 pt per m (stated ratio, refined by the scale bar)"
 layers: "9 with ink on this page, 9 in the file (1 switched off)"
 geometry: "243 strokes, 2 fills, 0 images"
+ink: "7 colours, 2 of them greys"
 labels: "24 stroke-font, 1 font text, 1 notes"
 size_labels: "9 (4 carry a slope or a system code, as a label on a pipe does)"
 ```

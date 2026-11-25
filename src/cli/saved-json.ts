@@ -12,7 +12,9 @@ export const SAVED_JSON: Readonly<Record<string, string[]>> = {
     '{file: string, scale: string, pt_per_m: number, basis: string, scale_bar: string | null, plotted_at: string | null, stated: string, sheet_covers: string, one_metre: string}',
   ],
   layers: [
-    '{file: string, scale: string, layers: {layer: string, run_m: number | null, strokes: number, color: string}[]}',
+    '{file: string, scale: string, ink?: string, layers: {layer: string, run_m: number | null, strokes: number, color: string}[]}',
+    '--by style: each layer is named as --layer takes it, such as (no layer)@#666666 w0.70 solid, and has no color key.',
+    'The ink key is present when the ink is all or almost all greys and the split is not by style.',
   ],
   legend: [
     '{file: string, box: string | null, legend: {text: string, layer: string, color: string, at: string}[]}',

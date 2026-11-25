@@ -333,3 +333,47 @@ export function scanLike(): Buffer {
   });
   return buildPdf([{ width: 200, height: 100, content: c }]);
 }
+
+/** What the grey sheet holds, at its stated 1:100. */
+export const GREY = {
+  /** System A: ten solid runs of 100 m, 0.7 points wide. */
+  a: { runs: 10, metres: 1000, style: '(no layer)@#666666 w0.70 solid' },
+  /** System B: five dashed runs of 50 m, 0.35 points wide, in the same grey. */
+  b: { runs: 5, metres: 250, style: '(no layer)@#666666 w0.35 dash6-3' },
+};
+
+/**
+ * A sheet plotted with no layers and in greys only, as some offices plot:
+ * light hatching, black walls, and two pipe systems in one grey that differ
+ * only by line width and dash pattern. 1801 x 840 mm at 1:100.
+ */
+export function greyDrawing(hatching = 2000): Buffer {
+  const c = new Content();
+  const width = 5105;
+  const height = 2381;
+  c.grey(0.871, 0.1).dash();
+  const across = Math.ceil(Math.sqrt(hatching * 2));
+  for (let i = 0; i < hatching; i++) {
+    const x = 50 + ((i % across) * (width - 100)) / across;
+    const y = 50 + (Math.floor(i / across) * (height - 100)) / across;
+    c.line(x, y, x + 6, y + 6);
+  }
+  c.grey(0, 0.5);
+  for (let i = 0; i < 400; i++) {
+    const x = 200 + (i % 40) * 110;
+    const y = 200 + Math.floor(i / 40) * 180;
+    c.line(x, y, x + 100, y);
+  }
+  const metre = (72 / 25.4) * 10;
+  c.grey(0.4, 0.7).dash();
+  for (let k = 0; k < GREY.a.runs; k++)
+    c.line(1000, 600 + k * 20, 1000 + 100 * metre, 600 + k * 20);
+  c.grey(0.4, 0.35).dash([6, 3]);
+  for (let k = 0; k < GREY.b.runs; k++)
+    c.line(1000, 1400 + k * 20, 1000 + 50 * metre, 1400 + k * 20);
+  c.dash();
+  for (let k = 0; k < GREY.a.runs; k++) c.text('A-110', 1200, 597 + k * 20);
+  for (let k = 0; k < GREY.b.runs; k++) c.text('B-50', 1200, 1397 + k * 20);
+  c.text('SCALE 1:100', 4600, 2300, 14);
+  return buildPdf([{ width, height, content: c }], { compress: true });
+}

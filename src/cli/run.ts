@@ -52,7 +52,7 @@ const LAYER: FlagSpec = {
   type: 'string',
   multiple: true,
   value: '<layer>',
-  summary: 'Layer name, or LAYER@#rrggbb for one colour',
+  summary: 'Layer, LAYER@#rrggbb, or a --by style row',
 };
 const GROUP: FlagSpec = {
   type: 'string',
@@ -111,6 +111,12 @@ export const COMMANDS: readonly CommandSpec[] = [
       split: {
         type: 'boolean',
         summary: 'One row per colour of each layer',
+      },
+      by: {
+        type: 'string',
+        value: '<color|style>',
+        summary:
+          'Split by color (default), or by style: colour, line width and dash, each row a --layer name; for a sheet in greys',
       },
       own: {
         type: 'boolean',
