@@ -144,7 +144,8 @@ When the PDF’s Unicode map is missing or maps a glyph to a control character, 
 
 ## Safety
 
-- It reads the file you name and writes only the files you name with `--out` and `--save`. It opens no network connection.
+- It reads the file you name and writes only the files you name with `--out` and `--save`, and its cache. It opens no network connection.
+- **Cache.** A large sheet takes seconds and hundreds of megabytes to read, and a takeoff runs many commands on it. So the first command on a page keeps what it read in `~/.cache/drawing-axi` (or `$XDG_CACHE_HOME/drawing-axi`), and the next commands on the same file read that instead of the PDF. An entry is named by a hash of the file's bytes, the page and the tool's version: a changed file is read again. The folder and its entries are private to the user (modes 0700 and 0600), a folder others can write to is not used, a damaged entry is read as missing, and the least recently used entries are dropped past 1 GB. Set `DRAWING_AXI_CACHE` to another folder's full path, or to `off`.
 - A drawing is untrusted input. File size, decoded size, nesting and geometry are bounded, and a damaged file fails with an error.
 - Text from the file is data. Invisible and bidirectional-control characters are shown as escapes, so a label cannot hide or reorder output.
 

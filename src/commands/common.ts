@@ -11,6 +11,7 @@ import {
 import { homedir } from 'node:os';
 import { isAbsolute, resolve } from 'node:path';
 import type { CommandInput, Io, Values } from '../cli/table.ts';
+import { SheetCache } from '../drawing/cache.ts';
 import {
   DeadlinePassed,
   DrawingTooLarge,
@@ -317,10 +318,18 @@ export function openSheet(input: CommandInput): OpenedSheet {
         { pages: pages.length },
       );
     const deadline = deadlineOf(input.io);
+    if (deadline !== undefined && input.io.now().getTime() > deadline)
+      throw new DeadlinePassed();
+    // A sheet read by an earlier command on the same file is kept.
+    const cache = SheetCache.open(input.io.env);
+    const key = cache?.keyOf(opened.doc.buf, page);
+    const kept = key === undefined ? null : (cache?.get(key) ?? null);
+    if (kept) return { ...opened, sheet: kept };
     const sheet = readSheet(opened.doc, page - 1, {
       ...(deadline === undefined ? {} : { deadline }),
       now: () => input.io.now().getTime(),
     });
+    if (key !== undefined) cache?.put(key, sheet);
     return { ...opened, sheet };
   } catch (error) {
     throw readerError(error);

@@ -23,7 +23,8 @@ Never include a real drawing that is not yours to share. The maintainers will ac
 
 **In scope:**
 - A file that makes the tool hang, run out of memory, or run past `COMIS_DEADLINE` without stopping.
-- A file that makes the tool read or write any path other than the file named, `--out` and `--save`.
+- A file that makes the tool read or write any path other than the file named, `--out`, `--save` and an entry of its sheet cache.
+- A way to make the tool use a cache entry written by another user, or a sheet kept for different file content.
 - Any network connection.
 - A bypass of the text-safety layer: invisible or bidirectional characters from a file's layer names or labels passing through unescaped, or text from a file changing the shape of the output so that it no longer decodes as one TOON document.
 - An error message that echoes a path, flag or value it was given.

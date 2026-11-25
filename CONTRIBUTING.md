@@ -47,7 +47,7 @@ drawing-axi is used by AI agents, so its output is part of its interface. Follow
 - **Errors:** an error prints `message`, `code` and `usage` on stdout. The exit code is 1 for an error and 2 for a usage error. Reuse an existing code before adding a new one. A message never echoes the path, flag or value it was given.
 - **Honest numbers:** a number is measured, or it is absent. Never fill in a size, a scale or a length the sheet does not state; report it as unsized or unknown, and say what would settle it. When a rule is a judgement (how far a label may sit from its run), make it a flag with a stated default, and print the setting with the result.
 - **Files are untrusted.** Bound everything a file can make large: bytes, decoded bytes, nesting, coordinates, labels. Text from a file goes through the text-safety layer in `src/output/text.ts`. Write invisible or bidirectional characters in source as `\u` escapes, never as literal characters.
-- **No network, no extra writes.** The tool reads the file it is given and writes only `--out` and `--save`.
+- **No network, no extra writes.** The tool reads the file it is given and writes only `--out`, `--save` and its sheet cache (`src/drawing/cache.ts`).
 - **Dependencies:** the only runtime dependency is `@toon-format/toon`, pinned exactly. The PDF reader is this project's own code. Discuss any new dependency in an issue first.
 - **Wording:** messages, help and docs use short, plain English sentences.
 

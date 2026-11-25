@@ -236,4 +236,3 @@ Three more workers took real levels from two offices in 0.1.1, blind to the peop
 - Pricing. The Comis skill hands rows to Priority; this tool does not know prices.
 - Areas, volumes and counts of anything that is not a tag or a symbol.
 - Vertical lengths, fittings, hangers and insulation: they are not on a plan.
-- A cache between commands. A sheet reads in a fraction of a second.
