@@ -180,7 +180,7 @@ Font text uses usable `ToUnicode` entries first and falls back to the font’s e
 ### 7.3 Scale
 
 1. The ratio is the most likely `1:N` on the sheet: the one beside a "scale" caption in any of several languages, else the most frequent.
-2. The factor is refined from a scale bar: two equal parallel edges whose length is a round number of metres at that ratio, within 5%, with ink in alternating cells between them (F10). A ruled table does not pass.
+2. A scale bar has two equal parallel edges whose length is a round number of metres at the nominal ratio, within 5%, with ink in alternating cells between them (F10). A ruled table does not pass. When the terminal label is readable with explicit metric units, it supplies the bar distance. The measured edge length and bar distance give the candidate factor. The factor refines the nominal one within 2%, or when a separate dimension confirms it within 1%. `scale` prints the bar evidence and the reason for the chosen factor.
 3. Without a bar the plot is taken as true to scale, and `scale` says so.
 4. `--scale` replaces the ratio; `--pt-per-m` replaces everything.
 6. A scale bar stands alone. A paving hatch in one plan has rows of alternating cells and matched a 2 m bar at 102.4% of the scale, which would have made every length on the sheet 2.4% short. A candidate whose band has ink of the same weight on both sides is a field, not a bar; of equal candidates, the one with the least ink beside it is taken.
