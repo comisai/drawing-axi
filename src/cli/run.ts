@@ -21,6 +21,7 @@ import { AxiError, usage } from '../errors.ts';
 import { errorText, helpBlock } from '../output/toon.ts';
 import { VERSION } from '../version.ts';
 import { parseCommand } from './parse.ts';
+import { SAVED_JSON } from './saved-json.ts';
 import {
   BIN,
   type CommandSpec,
@@ -34,30 +35,30 @@ const FILE = [{ name: '<file.pdf>', required: true }];
 const GAP: FlagSpec = {
   type: 'string',
   value: '<mm>',
-  summary: 'Join pieces up to this far apart on paper, default 8',
+  summary: 'Join pieces this far apart on paper, default 8',
 };
 const GROUP_GAP: FlagSpec = {
   type: 'string',
   multiple: true,
   value: '<name>=<mm>',
-  summary: 'A gap for one group, when its dashes are farther apart',
+  summary: 'Override --gap for one group',
 };
 const MIN: FlagSpec = {
   type: 'string',
   value: '<mm>',
-  summary: 'Leave out runs shorter than this on paper, default 6',
+  summary: 'Minimum run length on paper, default 6',
 };
 const LAYER: FlagSpec = {
   type: 'string',
   multiple: true,
   value: '<layer>',
-  summary: 'A layer by name; LAYER@#rrggbb takes one colour of it',
+  summary: 'Layer name, or LAYER@#rrggbb for one colour',
 };
 const GROUP: FlagSpec = {
   type: 'string',
   multiple: true,
   value: '<name>=<layer>',
-  summary: 'Layers measured as one system, joined by +: sewer=SEWER+VENT',
+  summary: 'Group layers as in sewer=SEWER+VENT',
 };
 const MATCH: FlagSpec = {
   type: 'string',
@@ -209,13 +210,11 @@ export const COMMANDS: readonly CommandSpec[] = [
       reach: {
         type: 'string',
         value: '<mm>',
-        summary:
-          'A size label may sit this far from its run on paper, default 1.5',
+        summary: 'Maximum gap from size label to run on paper, default 1.5',
       },
       plain: {
         type: 'boolean',
-        summary:
-          'Also use sizes written alone, without a slope or system prefix, that no riser tag claims',
+        summary: 'Include sizes written alone and unclaimed by a riser tag',
       },
       ...AREA_FLAGS,
       ...SCALE_FLAGS,
@@ -224,8 +223,7 @@ export const COMMANDS: readonly CommandSpec[] = [
       full: FULL_FLAG,
       save: SAVE_FLAG,
     },
-    summary:
-      'Run length by group and pipe size: the table for a bill of quantities',
+    summary: 'Run length by group and pipe size for a bill of quantities',
     run: measure,
   },
   {
@@ -260,8 +258,8 @@ export const COMMANDS: readonly CommandSpec[] = [
       out: {
         type: 'string',
         required: true,
-        value: '<file.svg>',
-        summary: 'The picture to write',
+        value: '<file.png|file.svg>',
+        summary: 'Write a PNG preview or an SVG picture',
       },
       layer: LAYER,
       region: AREA_FLAGS.region,
@@ -273,7 +271,8 @@ export const COMMANDS: readonly CommandSpec[] = [
       width: {
         type: 'string',
         value: '<px>',
-        summary: 'Picture width in pixels, default 1600',
+        summary:
+          'Picture width in pixels, default 1600. PNG fits within 1568 px on both sides',
       },
       force: {
         type: 'boolean',
@@ -281,14 +280,16 @@ export const COMMANDS: readonly CommandSpec[] = [
       },
       page: PAGE_FLAG,
     },
-    summary: 'Write a picture of chosen layers and area as SVG, to look at',
+    summary: 'Write a PNG or SVG picture of chosen layers and area',
     run: renderCommand,
   },
   {
     name: 'help',
     args: [{ name: '<command>', required: false }],
-    flags: {},
-    summary: 'Show help for a command',
+    flags: {
+      all: { type: 'boolean', summary: 'Show detailed help for every command' },
+    },
+    summary: 'Show help for one command or all commands',
     run: async () => '',
   },
 ];
@@ -297,33 +298,50 @@ const HOME = COMMANDS[0] as CommandSpec;
 const HELP_FLAGS = new Set(['--help', '-h']);
 const VERSION_FLAGS = new Set(['--version', '-v', '-V']);
 
-export function topHelp(): string {
+export function topHelp(all = false): string {
   return `${encode({
     description: DESCRIPTION,
     usage: `${BIN} [command] [flags]`,
-    commands: COMMANDS.map((c) => ({
-      command: commandName(c),
-      summary: c.summary,
-    })),
+    commands: COMMANDS.map((c) =>
+      all
+        ? commandReference(c)
+        : {
+            command: commandName(c),
+            summary: c.summary,
+          },
+    ),
     positions:
       'x,y in points from the top-left corner of the sheet, x right and y down; 72 points are one inch on paper',
     settings:
       'COMIS_DEADLINE (epoch ms): stop reading and say so before this time',
-  })}\n${helpBlock([`Run \`${BIN} help <command>\` for its flags`])}`;
+  })}\n${
+    all
+      ? ''
+      : helpBlock([
+          `Run \`${BIN} help <command>\` for its flags`,
+          `Run \`${BIN} help --all\` for every command's flags and saved JSON shapes`,
+        ])
+  }`;
 }
 
-export function commandHelp(spec: CommandSpec): string {
+function commandReference(spec: CommandSpec) {
   const flags = Object.entries(spec.flags).map(([name, f]) => ({
     flag:
       f.type === 'string' ? `--${name} ${f.value ?? '<value>'}` : `--${name}`,
     summary: f.multiple ? `${f.summary} (repeatable)` : f.summary,
   }));
-  return `${encode({
+  const savedJson = SAVED_JSON[spec.name];
+  return {
     command: commandName(spec),
     summary: spec.summary,
     usage: usageLine(spec),
     ...(flags.length ? { flags } : {}),
-  })}\n`;
+    ...(savedJson ? { saved_json: savedJson } : {}),
+  };
+}
+
+export function commandHelp(spec: CommandSpec): string {
+  return `${encode(commandReference(spec))}\n`;
 }
 
 function find(name: string): CommandSpec | undefined {
@@ -369,8 +387,10 @@ export async function main(argv: string[], io: Io): Promise<number> {
     const parsed = parseCommand(spec, rest);
     if (spec.name === 'help') {
       const target = parsed.positionals[0];
+      const all = parsed.values.all === true;
+      if (all && target) throw usage('Use --all without a command name.');
       if (!target) {
-        io.stdout(topHelp());
+        io.stdout(topHelp(all));
         return 0;
       }
       const found = find(target);

@@ -534,6 +534,80 @@ describe('symbols and render', () => {
     await ok('render', 'plan.pdf', '--out', 'crop.svg', '--force');
     assert.ok(existsSync(join(dir, 'crop.svg')));
   });
+
+  it('writes PNG previews with a 1568 px long side in either orientation', async () => {
+    for (const [file, region, width, height] of [
+      ['wide.PNG', '50,150,700,650', 1568, 1206],
+      ['tall.png', '50,150,550,800', 1206, 1568],
+      ['small.png', '50,150,700,650', 130, 100],
+    ] as const) {
+      const args = [
+        'render',
+        'plan.pdf',
+        '--layer',
+        'SEWER',
+        '--region',
+        region,
+        '--labels',
+        '--grid',
+        '--width',
+        file === 'small.png' ? '130' : '8000',
+        '--out',
+        file,
+      ];
+      const doc = await ok(...args);
+      const png = readFileSync(join(dir, file));
+      assert.equal(png.subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
+      assert.equal(png.toString('ascii', 12, 16), 'IHDR');
+      assert.equal(png.readUInt32BE(16), width);
+      assert.equal(png.readUInt32BE(20), height);
+      assert.equal(doc.picture, `${width} x ${height} px, ${png.length} bytes`);
+      assert.match(
+        String(doc.shows),
+        /^1 layer, [1-9]\d* strokes?, [1-9]\d* labels?$/,
+      );
+      assert.doesNotMatch(JSON.stringify(doc.help), /resvg/);
+    }
+    await fails('exists', 1, 'render', 'plan.pdf', '--out', 'tall.png');
+    await ok('render', 'plan.pdf', '--out', 'tall.png', '--force');
+  });
+});
+
+describe('help reference', () => {
+  it('shows the same detailed help for every command in a single TOON document', async () => {
+    const top = await ok('help');
+    const all = await ok('help', '--all');
+    const commands = rowsOf(all, 'commands');
+    assert.deepEqual(
+      commands.map((entry) => entry.command),
+      rowsOf(top, 'commands').map((entry) => entry.command),
+    );
+    for (const entry of commands.slice(1)) {
+      const name = String(entry.command).replace(/^drawing-axi /, '');
+      const single = await ok('help', name);
+      assert.deepEqual(entry, single);
+      if (
+        rowsOf(single, 'flags').some((f) =>
+          String(f.flag).startsWith('--save '),
+        )
+      ) {
+        assert.ok(single.saved_json, name);
+      }
+    }
+    await fails('usage', 2, 'help', 'render', '--all');
+  });
+
+  it('documents the differing JSON shapes and optional fields', async () => {
+    const measure = (await ok('help', 'measure')).saved_json;
+    const runs = (await ok('help', 'runs')).saved_json;
+    const labels = (await ok('help', 'labels')).saved_json;
+    assert.match(JSON.stringify(measure), /from: \[number, number\]/);
+    assert.match(JSON.stringify(measure), /size: string \| null/);
+    assert.match(JSON.stringify(runs), /from: string/);
+    assert.match(JSON.stringify(labels), /--sizes/);
+    assert.match(JSON.stringify(labels), /--each/);
+    assert.match(JSON.stringify(labels), /stored\?: string \| null/);
+  });
 });
 
 describe('errors', () => {
@@ -609,7 +683,18 @@ describe('errors', () => {
     );
     await fails('usage', 2, 'symbols', 'plan.pdf');
     await fails('usage', 2, 'render', 'plan.pdf');
-    await fails('usage', 2, 'render', 'plan.pdf', '--out', 'picture.png');
+    await fails('usage', 2, 'render', 'plan.pdf', '--out', 'picture.jpg');
+    await fails(
+      'usage',
+      2,
+      'render',
+      'plan.pdf',
+      '--out',
+      'oversized.png',
+      '--grid',
+      '--region',
+      `0,0,${'9'.repeat(400)},100`,
+    );
   });
 
   it('stops at the deadline it is given', async () => {

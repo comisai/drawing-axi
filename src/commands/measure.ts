@@ -271,7 +271,7 @@ export function runs(input: CommandInput): string {
     help: rows.length
       ? [
           'Run `drawing-axi measure <file.pdf> --group <name>=<layer> --group <name>=<layer>` for runs by pipe size, every system in one command',
-          'Run `drawing-axi render <file.pdf> --layer <layer> --region <x0,y0,x1,y1> --out <file.svg>` to see a run',
+          'Run `drawing-axi render <file.pdf> --layer <layer> --region <x0,y0,x1,y1> --out <file.png>` to see a run',
         ]
       : [
           'Run `drawing-axi layers <file.pdf>` for the layers that hold long runs',

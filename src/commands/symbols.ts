@@ -4,6 +4,7 @@
 import { existsSync, writeFileSync } from 'node:fs';
 import type { CommandInput } from '../cli/table.ts';
 import { MM_PER_PT } from '../drawing/model.ts';
+import { MAX_PNG_SIDE, renderPng } from '../drawing/png.ts';
 import { PictureTooLarge, renderSvg } from '../drawing/svg.ts';
 import { groupSymbols } from '../drawing/symbols.ts';
 import { AxiError, usage } from '../errors.ts';
@@ -17,6 +18,7 @@ import {
 import {
   areaOf,
   clipStrokes,
+  deadlineOf,
   inArea,
   list,
   openSheet,
@@ -152,7 +154,7 @@ export function symbols(input: CommandInput): string {
       'drawing-axi symbols <file.pdf> --layer <layer> --region <x0,y0,x1,y1>',
     help: rows.length
       ? [
-          'Run `drawing-axi render <file.pdf> --layer <layer> --region <x0,y0,x1,y1> --out <file.svg>` around first_at to see what a kind is',
+          'Run `drawing-axi render <file.pdf> --layer <layer> --region <x0,y0,x1,y1> --out <file.png>` around first_at to see what a kind is',
         ]
       : ['Run `drawing-axi layers <file.pdf>` for the layers with ink'],
   });
@@ -161,14 +163,18 @@ export function symbols(input: CommandInput): string {
 export function renderCommand(input: CommandInput): string {
   const outFlag = str(input.values, 'out');
   if (outFlag === undefined)
-    throw usage('Name the picture to write: --out <file.svg>.');
-  if (!/\.svg$/i.test(outFlag)) throw usage('--out must end in .svg.');
+    throw usage('Name the picture to write: --out <file.png|file.svg>.');
+  const png = /\.png$/i.test(outFlag);
+  if (!png && !/\.svg$/i.test(outFlag))
+    throw usage('--out must end in .png or .svg.');
   const out = resolvePath(input.io, outFlag);
-  if (existsSync(out) && input.values.force !== true)
-    throw new AxiError(
+  const force = input.values.force === true;
+  const alreadyExists = () =>
+    new AxiError(
       'exists',
       'A file is already at the --out path. Choose another name, or add --force to replace it.',
     );
+  if (!force && existsSync(out)) throw alreadyExists();
   const { sheet, name } = openSheet(input);
   const picks = list(input.values, 'layer').map((s) => pickLayer(sheet, s));
   const regionFlag = str(input.values, 'region');
@@ -176,6 +182,10 @@ export function renderCommand(input: CommandInput): string {
     regionFlag === undefined
       ? { x0: 0, y0: 0, x1: sheet.width, y1: sheet.height }
       : parseBox(regionFlag, 'region');
+  if (Object.values(region).some((v) => Math.abs(v) > 1e9))
+    throw usage(
+      '--region coordinates must be within a billion points of the page origin.',
+    );
   const width = positiveInt(input.values, 'width', 1600, 8000);
   const strokes = picks.length
     ? picks.flatMap((p) => strokesOf(sheet, p))
@@ -192,6 +202,7 @@ export function renderCommand(input: CommandInput): string {
       ...region,
       pictures: sheet.pictures,
       width,
+      ...(png ? { maxSide: MAX_PNG_SIDE } : {}),
       labels: input.values.labels === true,
       grid: input.values.grid === true,
     });
@@ -203,23 +214,37 @@ export function renderCommand(input: CommandInput): string {
       );
     throw error;
   }
+  const deadline = deadlineOf(input.io) ?? Infinity;
+  const image = png
+    ? renderPng(
+        picture.svg,
+        picture.labels > 0 || input.values.grid === true,
+        deadline - input.io.now().getTime(),
+      )
+    : picture.svg;
   try {
-    writeFileSync(out, picture.svg);
+    writeFileSync(out, image, { flag: force ? 'w' : 'wx' });
   } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === 'EEXIST') throw alreadyExists();
     throw new AxiError(
       'not_found',
-      `The --out file cannot be written (${(error as NodeJS.ErrnoException).code ?? 'unknown error'}).`,
+      `The --out file cannot be written (${code ?? 'unknown error'}).`,
     );
   }
   const record: Row = {
     wrote: out,
     file: name,
-    picture: `${width} x ${picture.height} px, ${Buffer.byteLength(picture.svg)} bytes`,
+    picture: `${picture.width} x ${picture.height} px, ${Buffer.byteLength(image)} bytes`,
     shows: `${picks.length ? plural(picks.length, 'layer') : 'every layer'}, ${plural(picture.strokes, 'stroke')}, ${plural(picture.labels, 'label')}`,
     region: `${Math.round(region.x0)},${Math.round(region.y0)},${Math.round(region.x1)},${Math.round(region.y1)}`,
   };
   return recordOutput(record, true, 'drawing-axi render', [
-    'Run `resvg <file.svg> <file.png>` to turn it into an image, then look at the image',
-    'Run `drawing-axi render <file.pdf> --region <x0,y0,x1,y1> --labels --grid --out <file.svg>` to zoom in with labels and a coordinate grid',
+    ...(png
+      ? []
+      : [
+          'Run `drawing-axi render <file.pdf> --out <file.png>` for a PNG preview',
+        ]),
+    'Run `drawing-axi render <file.pdf> --region <x0,y0,x1,y1> --labels --grid --out <file.png>` to zoom in with labels and a coordinate grid',
   ]);
 }

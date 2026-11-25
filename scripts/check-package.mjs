@@ -1,5 +1,5 @@
 // Check what `npm publish` would ship: only dist/, README.md, LICENSE, NOTICE
-// and package.json, a runnable bin with a shebang, the exact TOON pin, and no
+// and package.json, a runnable bin with a shebang, exact dependency pins, and no
 // source, tests, docs, fixtures or reports.
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -39,13 +39,17 @@ const pkg = JSON.parse(
 );
 if (pkg.bin?.['drawing-axi'] !== 'dist/bin/drawing-axi.js')
   fail('bin must be dist/bin/drawing-axi.js');
+const dependencies = ['@resvg/resvg-js', '@toon-format/toon'];
 if (
-  JSON.stringify(Object.keys(pkg.dependencies ?? {})) !==
-  '["@toon-format/toon"]'
+  Object.keys(pkg.dependencies ?? {})
+    .sort()
+    .join() !== dependencies.join()
 )
-  fail('the only runtime dependency must be @toon-format/toon');
-if (!/^\d+\.\d+\.\d+$/.test(pkg.dependencies['@toon-format/toon']))
-  fail('@toon-format/toon must be pinned exactly');
+  fail(`the runtime dependencies must be ${dependencies.join(' and ')}`);
+for (const dependency of dependencies) {
+  if (!/^\d+\.\d+\.\d+$/.test(pkg.dependencies[dependency]))
+    fail(`${dependency} must be pinned exactly`);
+}
 const bin = readFileSync(
   new URL('../dist/bin/drawing-axi.js', import.meta.url),
   'utf8',

@@ -48,17 +48,17 @@ drawing-axi measure plan.pdf \
 - `size_labels` says when a wider `--reach` would place more labels; try it, then check `sized_by`.
 - If `labels --sizes` shows many sizes with no code and no slope, and the sheet writes sizes beside its pipes, `--plain` uses those that no riser tag claims. Check `sized_by`.
 - The saved file lists every label that found no run (`unplaced`) with its place, and the layers of each group.
+- Run `drawing-axi help measure` for the saved JSON fields and types, or `drawing-axi help --all` for the full command reference.
 - `unsized` rows are pipe with no label along it. Size them from riser tags or the legend, with the owner. Never guess.
 
 ## Where is that run?
 
 ```sh
 drawing-axi runs plan.pdf --layer SEWER --limit 5
-drawing-axi render plan.pdf --layer SEWER --region 50,150,700,650 --labels --grid --out crop.svg
-resvg crop.svg crop.png
+drawing-axi render plan.pdf --layer SEWER --region 50,150,700,650 --labels --grid --out crop.png
 ```
 
-Then look at `crop.png`. The grid's numbers are the same coordinates the commands print.
+Then look at `crop.png`. Its long side is at most 1568 pixels. The grid's numbers are the same coordinates the commands print.
 
 ## How many risers of each size?
 
@@ -73,7 +73,7 @@ A tag is an identifier with a size beside it. What a series letter means is in t
 
 ```sh
 drawing-axi symbols plan.pdf --layer SYMBOLS
-drawing-axi render plan.pdf --layer SYMBOLS --region 380,300,600,400 --out symbols.svg
+drawing-axi render plan.pdf --layer SYMBOLS --region 380,300,600,400 --out symbols.png
 ```
 
 `symbols` counts groups of the same size and make-up, each layer on its own. It does not know what they are: render one `first_at` and look. `--save` writes the place of every symbol.
