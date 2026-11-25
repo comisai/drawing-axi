@@ -319,7 +319,7 @@ export function topHelp(all = false): string {
     positions:
       'x,y in points from the top-left corner of the sheet, x right and y down; 72 points are one inch on paper',
     settings:
-      'COMIS_DEADLINE (epoch ms): stop reading and say so before this time',
+      'COMIS_DEADLINE (epoch ms): stop reading and say so before this time. DRAWING_AXI_CACHE: the folder that keeps sheets already read, by their content (default ~/.cache/drawing-axi), or off',
   })}\n${
     all
       ? ''
