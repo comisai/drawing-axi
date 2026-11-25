@@ -17,6 +17,7 @@ import {
 import {
   areaOf,
   clipStrokes,
+  fillsOf,
   inArea,
   list,
   openSheet,
@@ -76,11 +77,8 @@ export function symbols(input: CommandInput): string {
   for (const pick of picks) {
     const groups = groupSymbols(
       clipStrokes(strokesOf(sheet, pick), area),
-      sheet.fills.filter(
-        (f) =>
-          f.layer === pick.layer &&
-          (pick.color === null || pick.color === f.color) &&
-          inArea(area, (f.x0 + f.x1) / 2, (f.y0 + f.y1) / 2),
+      fillsOf(sheet, pick).filter((f) =>
+        inArea(area, (f.x0 + f.x1) / 2, (f.y0 + f.y1) / 2),
       ),
       { join: paperMm(joinMm), maxPiece: paperMm(maxMm) },
     );

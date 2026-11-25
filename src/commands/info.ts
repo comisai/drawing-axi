@@ -8,10 +8,13 @@ import { sizeLabels } from '../drawing/sizes.ts';
 import { AxiError } from '../errors.ts';
 import { type Row, recordOutput } from '../output/views.ts';
 import {
+  inkOf,
+  inkText,
   openSheet,
   PICTURED,
   percent,
   round,
+  STYLE_SPLIT,
   save,
   scaleOf,
   sheetSize,
@@ -68,14 +71,16 @@ export function info(input: CommandInput): string {
       `Pictures cover ${percent(sheet.pictureShare)} of this page: the drawing is a picture. A pipe drawn in a picture is not a line, so it is not measured, and \`render\` shows only where the pictures are. Ask for the PDF plotted from the CAD file, not a print of it.`,
     );
   else if (!sheet.strokes.length) notes.push('This page holds no lines.');
+  // With no layers to go by, systems are told apart by colour; on a sheet in
+  // greys colour will not do it, and line width and dash may.
+  const ink = inkOf(sheet.strokes);
+  const apart = ink.greyscale
+    ? `Its ink is ${inkText(ink)}, so colour will not tell systems apart. Tell them apart by line width and dash: \`${STYLE_SPLIT}\`.`
+    : 'Tell systems apart by colour: `drawing-axi layers <file.pdf> --split`.';
   if (!pictured && sheet.strokes.length && sheet.layers.length && !used)
-    notes.push(
-      'No line on this page is on a layer. Tell systems apart by colour: `drawing-axi layers <file.pdf> --split`.',
-    );
+    notes.push(`No line on this page is on a layer. ${apart}`);
   if (!pictured && sheet.strokes.length && !sheet.layers.length)
-    notes.push(
-      'The file keeps no layers. Tell systems apart by colour: `drawing-axi layers <file.pdf> --split`.',
-    );
+    notes.push(`The file keeps no layers. ${apart}`);
   if (sheet.strokes.length && !sheet.labels.length)
     notes.push(
       'The file keeps no text. Sizes and names must come from looking at the sheet: `drawing-axi render`.',
@@ -93,6 +98,7 @@ export function info(input: CommandInput): string {
     scale,
     layers: `${used} with ink on this page, ${sheet.layers.length} in the file${hidden ? ` (${hidden} switched off)` : ''}`,
     geometry: `${sheet.strokes.length} strokes, ${sheet.fills.length} fills, ${sheet.images} images`,
+    ...(sheet.strokes.length ? { ink: inkText(ink) } : {}),
     ...(sheet.images
       ? {
           pictures: `${sheet.images}, covering ${percent(sheet.pictureShare)} of the page`,

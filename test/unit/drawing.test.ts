@@ -63,7 +63,7 @@ const stroke = (pts: number[]): Stroke => ({
   layer: 0,
   color: 0,
   width: 1,
-  dashed: false,
+  dash: '',
   pts,
 });
 const label = (

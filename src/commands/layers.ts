@@ -1,14 +1,22 @@
 // `layers`: every layer with the length of straight runs drawn on it. The
-// layers that carry pipes stand out: long runs, one colour.
+// layers that carry pipes stand out: long runs, one colour. Split by colour,
+// or by colour and line style where one grey holds more than one system.
 
 import type { CommandInput } from '../cli/table.ts';
-import { colorHex, type Stroke } from '../drawing/model.ts';
+import {
+  colorHex,
+  type Stroke,
+  styleText,
+  widthKey,
+} from '../drawing/model.ts';
 import { buildRuns, segmentsOf } from '../drawing/runs.ts';
-import { AxiError } from '../errors.ts';
+import { AxiError, usage } from '../errors.ts';
 import { countLine, listOutput, type Row } from '../output/views.ts';
 import {
   areaOf,
   clipStrokes,
+  inkOf,
+  inkText,
   LETTER_GAPS,
   linetypeLetters,
   NO_LAYER,
@@ -17,6 +25,7 @@ import {
   positiveInt,
   positiveNumber,
   round,
+  STYLE_SPLIT,
   save,
   scaleOf,
   str,
@@ -24,8 +33,14 @@ import {
 import { scaleLine } from './info.ts';
 
 export function layers(input: CommandInput): string {
+  const by = str(input.values, 'by')?.toLowerCase();
+  if (by !== undefined && !['color', 'colour', 'style'].includes(by))
+    throw usage(
+      '--by takes color, for one row per colour of each layer, or style, for one row per colour, line width and dash.',
+    );
+  const byStyle = by === 'style';
+  const split = input.values.split === true || by !== undefined;
   const { sheet, name } = openSheet(input);
-  const split = input.values.split === true;
   const match = str(input.values, 'match')?.toLowerCase();
   const limit = positiveInt(input.values, 'limit', 20);
   const gap = paperMm(positiveNumber(input.values, 'gap', 8, 100));
@@ -43,20 +58,16 @@ export function layers(input: CommandInput): string {
     if (!(error instanceof AxiError) || error.code !== 'scale_unknown')
       throw error;
   }
-  const buckets = new Map<
-    string,
-    { layer: number; color: number | null; strokes: Stroke[] }
-  >();
+  const buckets = new Map<string, { layer: number; strokes: Stroke[] }>();
   for (const stroke of clipStrokes(sheet.strokes, area)) {
-    const key = split ? `${stroke.layer}|${stroke.color}` : `${stroke.layer}`;
+    const key = byStyle
+      ? `${stroke.layer}|${stroke.color}|${widthKey(stroke.width)}|${stroke.dash}`
+      : split
+        ? `${stroke.layer}|${stroke.color}`
+        : `${stroke.layer}`;
     const bucket = buckets.get(key);
     if (bucket) bucket.strokes.push(stroke);
-    else
-      buckets.set(key, {
-        layer: stroke.layer,
-        color: split ? stroke.color : null,
-        strokes: [stroke],
-      });
+    else buckets.set(key, { layer: stroke.layer, strokes: [stroke] });
   }
   const rows: Row[] = [];
   for (const bucket of buckets.values()) {
@@ -86,10 +97,15 @@ export function layers(input: CommandInput): string {
     }
     const colors = [...inkByColor].sort((a, b) => b[1] - a[1]);
     const top = colors[0] as [number, number];
+    // Split by style, a row is named by the selector the measuring commands
+    // take: `(no layer)@#666666 w0.70 solid`.
+    const named = byStyle
+      ? `${layerName}@${colorHex(top[0])} ${styleText(bucket.strokes[0] as Stroke)}`
+      : layerName;
     rows.push({
       layer: sheet.layers[bucket.layer]?.hidden
-        ? `${layerName} (switched off)`
-        : layerName,
+        ? `${named} (switched off)`
+        : named,
       run_m: ptPerM === null ? null : round(runLength / ptPerM, 1),
       strokes: bucket.strokes.length,
       color:
@@ -104,14 +120,36 @@ export function layers(input: CommandInput): string {
       (b._sort as number) - (a._sort as number) ||
       String(a.layer).localeCompare(String(b.layer)),
   );
+  // On a sheet in greys, colour will not tell systems apart; line style may.
+  const ink = inkOf(sheet.strokes);
+  const inkNote =
+    ink.greyscale && !byStyle
+      ? `${inkText(ink)}; colour will not tell systems apart. Run \`${STYLE_SPLIT}\` to split by line width and dash too`
+      : null;
+  const columns = byStyle
+    ? ['layer', 'run_m', 'strokes']
+    : ['layer', 'run_m', 'strokes', 'color'];
   const saved = save(input.io, str(input.values, 'save'), {
     file: name,
     scale: scaleText,
-    layers: rows.map(({ _sort, ...row }) => row),
+    ...(inkNote ? { ink: inkNote } : {}),
+    layers: rows.map(({ _sort, ...row }) =>
+      byStyle
+        ? { layer: row.layer, run_m: row.run_m, strokes: row.strokes }
+        : row,
+    ),
   });
   const shown = input.values.full === true ? rows : rows.slice(0, limit);
-  const what = split ? 'layer and colour' : 'layer';
-  const whats = split ? 'layers and colours' : 'layers';
+  const what = byStyle
+    ? 'layer and line style'
+    : split
+      ? 'layer and colour'
+      : 'layer';
+  const whats = byStyle
+    ? 'layers and line styles'
+    : split
+      ? 'layers and colours'
+      : 'layers';
   return listOutput({
     key: 'layers',
     summary: rows.length
@@ -119,17 +157,28 @@ export function layers(input: CommandInput): string {
       : match
         ? `0 layers match; the sheet has ${sheet.layers.length}`
         : '0 layers with ink',
-    head: { file: name, scale: scaleText, saved },
+    head: { file: name, scale: scaleText, ink: inkNote, saved },
     rows: shown,
-    columns: ['layer', 'run_m', 'strokes', 'color'],
+    columns,
     full: input.values.full === true,
     narrower: 'drawing-axi layers <file.pdf> --match <text>',
     help: rows.length
-      ? [
-          'Run `drawing-axi layers <file.pdf> --split --match <layer>` when one layer shows more than one colour',
-          'Run `drawing-axi measure <file.pdf> --group <name>=<layer> --group <name>=<layer>` to measure by pipe size, every system in one command',
-          'Run `drawing-axi render <file.pdf> --layer <layer> --out <file.svg>` to see what a layer draws',
-        ]
+      ? byStyle
+        ? [
+            "Run `drawing-axi measure <file.pdf> --group <name>='<layer>@#rrggbb w0.70 solid'` with a row's layer as printed, one group per system",
+            "Run `drawing-axi render <file.pdf> --layer '<layer>@#rrggbb w0.70 solid' --out <file.svg>` to see what one line style draws",
+          ]
+        : [
+            ...(inkNote
+              ? [
+                  `Run \`${STYLE_SPLIT}\` for one row per colour, line width and dash`,
+                ]
+              : [
+                  'Run `drawing-axi layers <file.pdf> --split --match <layer>` when one layer shows more than one colour',
+                ]),
+            'Run `drawing-axi measure <file.pdf> --group <name>=<layer> --group <name>=<layer>` to measure by pipe size, every system in one command',
+            'Run `drawing-axi render <file.pdf> --layer <layer> --out <file.svg>` to see what a layer draws',
+          ]
       : ['Run `drawing-axi layers <file.pdf>` without --match for every layer'],
   });
 }

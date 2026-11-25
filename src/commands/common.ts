@@ -17,13 +17,17 @@ import {
   readSheet,
 } from '../drawing/extract.ts';
 import {
+  type Fill,
+  isGrey,
   MM_PER_PT,
   parseColor,
   type Sheet,
   type Stroke,
+  widthKey,
 } from '../drawing/model.ts';
 import { type Scale, ScaleUnknown, sheetScale } from '../drawing/scale.ts';
 import { AxiError, usage } from '../errors.ts';
+import { plural } from '../output/views.ts';
 import { EncryptedPdf, NotPdf, PdfDocument } from '../pdf/document.ts';
 import { UnsupportedFilter } from '../pdf/filters.ts';
 import { PdfSyntaxError } from '../pdf/objects.ts';
@@ -376,6 +380,54 @@ export interface LayerPick {
   name: string;
   /** Only strokes of this colour, or null for every colour. */
   color: number | null;
+  /** Only strokes of this width, in hundredths of a point, or null for every width. */
+  width: number | null;
+  /**
+   * Only strokes with this dash: '' for solid, 'dashed' for any pattern, a
+   * pattern such as '6-3' for that one, or null for every line.
+   */
+  dash: string | null;
+}
+
+/** The line style named at the end of a selector: ` w0.70`, ` solid`, ` dashed`, ` dash6-3`. */
+const WIDTH_PART = /\s+w(\d{1,6}(?:\.\d{1,3})?)$/i;
+const DASH_PART =
+  /\s+(solid|dashed|dash(\d{1,6}(?:\.\d)?(?:-\d{1,6}(?:\.\d)?){0,7}))$/i;
+
+/** Take a line style off the end of a selector: `NAME@#666666 w0.70 solid`. */
+function splitStyle(spec: string): {
+  rest: string;
+  width: number | null;
+  dash: string | null;
+} {
+  let rest = spec.trim();
+  let width: number | null = null;
+  let dash: string | null = null;
+  for (let i = 0; i < 2; i++) {
+    const d: RegExpExecArray | null =
+      dash === null ? DASH_PART.exec(rest) : null;
+    if (d) {
+      const word: string = (d[1] as string).toLowerCase();
+      dash =
+        word === 'solid' ? '' : word === 'dashed' ? 'dashed' : (d[2] ?? '');
+      rest = rest.slice(0, d.index);
+      continue;
+    }
+    const w: RegExpExecArray | null =
+      width === null ? WIDTH_PART.exec(rest) : null;
+    if (w) {
+      width = widthKey(Number(w[1]));
+      rest = rest.slice(0, w.index);
+    }
+  }
+  return { rest, width, dash };
+}
+
+/** A selector's layer name, without its colour and line style. */
+function selectorName(spec: string): string {
+  return splitStyle(spec)
+    .rest.replace(/@#?[0-9a-fA-F]{3,6}$/, '')
+    .trim();
 }
 
 /** Layer names that hold the text, for an unknown-layer message. */
@@ -390,22 +442,32 @@ function suggest(sheet: Sheet, wanted: string): string {
     : ' Run `drawing-axi layers <file.pdf>` for the names.';
 }
 
-/** `NAME` or `NAME@#rrggbb`. The name is matched exactly, then without case. */
+/**
+ * `NAME`, `NAME@#rrggbb`, or either followed by a line style as `layers --by
+ * style` prints it: a width such as `w0.70`, a dash such as `solid`, `dashed`
+ * or `dash6-3`, or both. The name is matched exactly, then without case. A
+ * layer whose whole name looks like a style is still found by that name.
+ */
 export function pickLayer(sheet: Sheet, spec: string): LayerPick {
-  const at = spec.lastIndexOf('@');
-  let name = spec;
+  const style = sheet.layers.some((l) => l.name === spec.trim())
+    ? { rest: spec, width: null, dash: null }
+    : splitStyle(spec);
+  const { width, dash } = style;
+  const at = style.rest.lastIndexOf('@');
+  let name = style.rest;
   let color: number | null = null;
   if (at > 0) {
-    const parsed = parseColor(spec.slice(at + 1));
+    const parsed = parseColor(style.rest.slice(at + 1));
     if (parsed !== null) {
       color = parsed;
-      name = spec.slice(0, at);
+      name = style.rest.slice(0, at);
     }
   }
   name = name.trim();
   if (!name) throw usage('A layer name is missing.');
   // Ink on no layer is listed under this name, and can be measured by it.
-  if (name === NO_LAYER) return { layer: -1, name: NO_LAYER, color };
+  if (name === NO_LAYER)
+    return { layer: -1, name: NO_LAYER, color, width, dash };
   let index = sheet.layers.findIndex((l) => l.name === name);
   if (index < 0) {
     const matches = sheet.layers
@@ -426,6 +488,8 @@ export function pickLayer(sheet: Sheet, spec: string): LayerPick {
     layer: index,
     name: (sheet.layers[index] as { name: string }).name,
     color,
+    width,
+    dash,
   };
 }
 
@@ -440,8 +504,10 @@ export function pickLayers(sheet: Sheet, spec: string): LayerPick[] {
     let taken = 0;
     for (let end = parts.length; end > at + 1 && !taken; end--) {
       const joined = parts.slice(at, end).join('+');
-      const name = joined.replace(/@#?[0-9a-fA-F]{3,6}$/, '').trim();
-      if (sheet.layers.some((l) => l.name === name)) {
+      const name = selectorName(joined);
+      if (
+        sheet.layers.some((l) => l.name === name || l.name === joined.trim())
+      ) {
         picks.push(pickLayer(sheet, joined));
         taken = end - at;
       }
@@ -480,9 +546,83 @@ export const LETTER_GAPS = 2;
 export function strokesOf(sheet: Sheet, pick: LayerPick): Stroke[] {
   return sheet.strokes.filter(
     (s) =>
-      s.layer === pick.layer && (pick.color === null || s.color === pick.color),
+      s.layer === pick.layer &&
+      (pick.color === null || s.color === pick.color) &&
+      (pick.width === null || widthKey(s.width) === pick.width) &&
+      (pick.dash === null ||
+        (pick.dash === 'dashed' ? s.dash !== '' : s.dash === pick.dash)),
   );
 }
+
+/**
+ * The fills a pick takes: those on its layer in its colour. A fill has no
+ * line, so a pick that names a line style takes none.
+ */
+export function fillsOf(sheet: Sheet, pick: LayerPick): Fill[] {
+  if (pick.width !== null || pick.dash !== null) return [];
+  return sheet.fills.filter(
+    (f) =>
+      f.layer === pick.layer && (pick.color === null || pick.color === f.color),
+  );
+}
+
+/** Grey ink at or above this share of all ink makes a sheet one in greys. */
+export const GREY_SHARE = 0.98;
+
+export interface Ink {
+  /** Colours the strokes are drawn in. */
+  colors: number;
+  /** How many of them are greys. */
+  greys: number;
+  /** The share of ink, by length, drawn in greys. */
+  greyShare: number;
+  /** Grey enough that colour will not tell systems apart. */
+  greyscale: boolean;
+}
+
+/** The colours of a sheet's strokes, weighed by length. */
+export function inkOf(strokes: readonly Stroke[]): Ink {
+  const byColor = new Map<number, number>();
+  for (const stroke of strokes) {
+    const p = stroke.pts;
+    let length = 0;
+    for (let i = 0; i + 3 < p.length; i += 2)
+      length += Math.hypot(
+        (p[i + 2] as number) - (p[i] as number),
+        (p[i + 3] as number) - (p[i + 1] as number),
+      );
+    byColor.set(stroke.color, (byColor.get(stroke.color) ?? 0) + length);
+  }
+  let total = 0;
+  let grey = 0;
+  let greys = 0;
+  for (const [color, length] of byColor) {
+    total += length;
+    if (isGrey(color)) {
+      grey += length;
+      greys++;
+    }
+  }
+  const greyShare = total > 0 ? grey / total : 0;
+  return {
+    colors: byColor.size,
+    greys,
+    greyShare,
+    greyscale: byColor.size > 0 && greyShare >= GREY_SHARE,
+  };
+}
+
+/** The colours in words: "all greys (3 shades)", "12 colours, 4 of them greys". */
+export function inkText(ink: Ink): string {
+  const shades = plural(ink.greys, 'shade');
+  if (ink.greys === ink.colors) return `all greys (${shades})`;
+  if (ink.greyscale)
+    return `almost all greys (${ink.greyShare < 0.995 ? percent(ink.greyShare) : 'over 99%'} of the ink, in ${shades}; ${plural(ink.colors - ink.greys, 'other colour')})`;
+  return `${plural(ink.colors, 'colour')}, ${ink.greys} of them grey${ink.greys === 1 ? '' : 's'}`;
+}
+
+/** The command that tells systems apart on a sheet in greys. */
+export const STYLE_SPLIT = 'drawing-axi layers <file.pdf> --split --by style';
 
 /** Write the complete result as JSON for a program to read. */
 export function save(

@@ -51,13 +51,15 @@ const LAYER: FlagSpec = {
   type: 'string',
   multiple: true,
   value: '<layer>',
-  summary: 'A layer by name; LAYER@#rrggbb takes one colour of it',
+  summary:
+    "A layer by name; LAYER@#rrggbb takes one colour of it, and 'LAYER@#rrggbb w0.70 solid' one line style, as `layers --by style` names it",
 };
 const GROUP: FlagSpec = {
   type: 'string',
   multiple: true,
   value: '<name>=<layer>',
-  summary: 'Layers measured as one system, joined by +: sewer=SEWER+VENT',
+  summary:
+    "Layers measured as one system, joined by +: sewer=SEWER+VENT; a layer takes a colour and line style as --layer does: 'a=(no layer)@#666666 w0.70 solid'",
 };
 const MATCH: FlagSpec = {
   type: 'string',
@@ -109,6 +111,12 @@ export const COMMANDS: readonly CommandSpec[] = [
       split: {
         type: 'boolean',
         summary: 'One row per colour of each layer',
+      },
+      by: {
+        type: 'string',
+        value: '<color|style>',
+        summary:
+          'What --split splits by: color (the default), or style for one row per colour, line width and dash, named as --layer takes it; for a sheet in greys',
       },
       own: {
         type: 'boolean',

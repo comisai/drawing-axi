@@ -39,6 +39,7 @@ These facts were checked on eight sheets from one design office: plumbing and fi
 | F15 | **Files have defects.** One stream in each file declares the wrong length; a common extractor prints errors and carries on. | Trust a length only when the end marker follows it. |
 | F17 | **Joined files lose the layer list.** A tool that joins sheets into one PDF drops the catalog's list of layers; each page still names its own layers in its resources. | Learn a layer from the page when the catalog does not list it. |
 | F16 | **Some offices send prints, not plots.** Eight sheets from a second office were printed through a PDF printer: the layers and stroke-font labels are gone, and the drawing is 155 lossless picture tiles covering the page. Only the column grid and the leaders are lines, and the labels are font text. | Say how much of the page pictures cover; above half, the drawing is a picture and is not measured. Ask for the CAD plot. Measuring coloured pipe in the pictures is a later feature (§9). |
+| F18 | **Some offices plot with no layers, in greys.** Every stroke is on no layer, and nearly all the ink is grey or black, so neither layer nor colour tells systems apart. Two systems in one grey differ by line width and dash pattern. Workers who had only the layer and colour split wrote their own PDF parsers to sort lines by width. | Say when the ink is all greys. Split and pick strokes by line width and dash as well as by layer and colour. |
 
 **What was measured.** The live test (§11) compares run lengths with a person's takeoff of the same project, by system and floor. All 17 comparisons on five sheets are within 10%. The largest differences are 9.7% and 9.2%; half are under 4%.
 
@@ -116,7 +117,7 @@ flowchart LR
 ```
 
 - **`src/pdf/`** reads a file into objects and decoded streams. It knows nothing about drawings.
-- **`src/drawing/extract.ts`** walks one page's content and returns a `Sheet`: every stroked and filled path with its layer, colour and width, in sheet coordinates, and every label.
+- **`src/drawing/extract.ts`** walks one page's content and returns a `Sheet`: every stroked and filled path with its layer, colour, width and dash pattern, in sheet coordinates, and every label.
 - **The rest of `src/drawing/`** are pure functions from a `Sheet` to an answer. Each has a unit test against a sheet whose answer is known.
 - **`src/commands/`** turn flags into those calls and results into rows.
 - **`src/cli/` and `src/output/`** are the AXI runtime shared in shape with `ituran-axi` and `priority-axi`: one command table, strict parsing, TOON with size bounds, text safety.
@@ -131,7 +132,7 @@ flowchart LR
 | `info <file.pdf>` | What does this sheet hold, and what is missing? |
 | `scale <file.pdf>` | What is the scale, and how was it found? |
 | `legend <file.pdf>` | Which layer and colour does each legend line stand for? |
-| `layers <file.pdf>` | Which layers carry long runs? `--split` shows each colour of a layer. |
+| `layers <file.pdf>` | Which layers carry long runs? `--split` shows each colour of a layer; `--split --by style` each colour, line width and dash, for a sheet in greys (F18). |
 | `labels <file.pdf>` | What does the sheet say? `--match`, `--each`, `--sizes`, `--source`. |
 | `tags <file.pdf>` | Which risers are tagged, with what size? |
 | `runs <file.pdf> --layer …` | Where is each run, and how long? |
@@ -146,7 +147,7 @@ Flags shared by the measuring commands:
 - **Runs:** `--gap mm`, `--min mm`, on paper.
 - **Output:** `--limit n`, `--full`, `--save file.json`, `--page n`.
 
-A layer is named exactly, or without regard to case when that is unambiguous. `LAYER@#rrggbb` takes one colour of it. Ink on no layer is listed and named as `(no layer)`. A group's name is the caller's own words. `--save` writes the complete result as JSON for a program to read; stdout stays the bounded TOON summary.
+A layer is named exactly, or without regard to case when that is unambiguous. `LAYER@#rrggbb` takes one colour of it. Either may end in a line style as `layers --by style` names it: a width in points (`w0.70`), a dash (`solid`, `dashed`, or a pattern such as `dash6-3`), or both. A style takes only strokes of that width and dash, and no fills. A layer whose whole name looks like a style is still found by that name. Ink on no layer is listed and named as `(no layer)`. A group's name is the caller's own words. `--save` writes the complete result as JSON for a program to read; stdout stays the bounded TOON summary.
 
 ## 7. Behavior
 
@@ -307,7 +308,7 @@ No Gate change is needed: the tool uses no network and holds no secret. The draw
 
 | ID | Question or risk | Plan |
 | --- | --- | --- |
-| Q1 | Do other offices' PDFs keep layers and labels? | `info` reports it per sheet. Test at M8. Without layers the tool can still split by colour; without labels sizes come from looking. |
+| Q1 | Do other offices' PDFs keep layers and labels? | `info` reports it per sheet. Test at M8. Without layers the tool can still split by colour, and on a sheet in greys by line width and dash (F18); without labels sizes come from looking. |
 | Q2 | A sheet printed to fit a smaller page is off its stated scale by far more than 5%, and the bar is then not used. | `scale` says "no scale bar found". The skill checks one known length before measuring. A length check against notes on the sheet is a later feature. |
 | Q3 | One layer may hold two systems in two colours (F13). | `layers --split`, `LAYER@#colour`, and `render`. |
 | Q4 | Vertical lengths are not on a plan. | Tags give counts per size; the skill asks for floor heights or sections. |
