@@ -128,7 +128,7 @@ export function layers(input: CommandInput): string {
       ? [
           'Run `drawing-axi layers <file.pdf> --split --match <layer>` when one layer shows more than one colour',
           'Run `drawing-axi measure <file.pdf> --group <name>=<layer> --group <name>=<layer>` to measure by pipe size, every system in one command',
-          'Run `drawing-axi render <file.pdf> --layer <layer> --out <file.svg>` to see what a layer draws',
+          'Run `drawing-axi render <file.pdf> --layer <layer> --out <file.png>` to see what a layer draws',
         ]
       : ['Run `drawing-axi layers <file.pdf>` without --match for every layer'],
   });

@@ -10,7 +10,9 @@ safety, TOON rendering with size bounds, and the list and record views.
 The PDF reader in src/pdf/ is written for this project from the PDF
 specification (ISO 32000). It includes no code from another PDF library.
 
-Runtime dependency: @toon-format/toon 4.4.0, MIT License.
+Runtime dependencies:
+  @toon-format/toon 4.4.0, MIT License.
+  @resvg/resvg-js 2.6.2, MPL-2.0, https://github.com/thx/resvg-js.
 
 AutoCAD is a trademark of Autodesk, Inc. This project is not made or endorsed
 by Autodesk.

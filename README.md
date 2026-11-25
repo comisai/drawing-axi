@@ -45,11 +45,16 @@ drawing-axi runs <file.pdf> --layer L     the straight runs on chosen layers, wi
 drawing-axi measure <file.pdf> --group name=LAYER[+LAYER]...
                                           run length by group and pipe size
 drawing-axi symbols <file.pdf> --layer L  symbols counted by size and make-up
-drawing-axi render <file.pdf> --out f.svg a picture of chosen layers and area, to look at
-drawing-axi help <command>                flags for one command
+drawing-axi render <file.pdf> --out f.png a PNG preview of chosen layers and area
+drawing-axi help <command>                flags and saved JSON shape for one command
+drawing-axi help --all                    detailed help for every command in one call
 ```
 
 Positions are `x,y` in points from the top-left corner of the sheet, x to the right and y down. 72 points are one inch on paper.
+
+PNG previews preserve the region's aspect ratio within 1568 pixels on the long side. Use `--width` for a smaller image or `--out f.svg` for an SVG export. PNG text in `--labels` and `--grid` uses installed fonts.
+
+For commands with `--save`, the `saved_json` section of help lists the fields and types for each saved file. A `?` marks a field that can be absent.
 
 ### A takeoff, step by step
 
