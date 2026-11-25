@@ -271,6 +271,8 @@ class Writer {
   }
 
   private emit(bytes: Uint8Array): void {
+    // Node 22 gives a CRC of 0 for no bytes, whatever came before.
+    if (!bytes.length) return;
     this.sink(bytes);
     this.crc = crc32(bytes, this.crc);
     this.size += bytes.length;

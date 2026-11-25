@@ -65,6 +65,19 @@ describe('Cache: a kept sheet reads back the same', () => {
     assert.deepEqual(back, sheet);
   });
 
+  it('reads back a sheet with empty parts: no strokes, fills or pictures', () => {
+    const sheet = sampleSheet();
+    const empty: Sheet = {
+      ...sheet,
+      strokes: [],
+      fills: [],
+      pictures: [],
+      labels: [],
+      skipped: [],
+    };
+    assert.deepEqual(decodeSheet(encodeSheet(empty)), empty);
+  });
+
   it('keeps the dash pattern of each stroke', () => {
     const sheet = readSheet(PdfDocument.open(greyDrawing(200)), 0);
     const dashes = new Set(sheet.strokes.map((s) => s.dash));
