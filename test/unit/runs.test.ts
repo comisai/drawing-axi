@@ -227,9 +227,9 @@ describe('Runs: dense background hatching', () => {
       runs.some((r) => r.length > 1790 && Math.abs(r.y0 - 500.3) < 0.01),
       'the pipe is one run',
     );
-    // The plain search took about 2.5 s for this on a fast machine; the
-    // lookup by direction takes a fraction of that. The bound leaves room for
-    // a slow machine.
+    // On one machine the plain search took 1.4 s for this and the lookup by
+    // direction 0.5 s. The bound is loose, for slow machines: it catches a
+    // return to work that grows with the density of the hatching.
     assert.ok(took < 2500, `took ${Math.round(took)} ms`);
   });
 });
