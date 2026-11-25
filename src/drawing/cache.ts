@@ -24,7 +24,7 @@ import {
   statSync,
   unlinkSync,
   utimesSync,
-  writeFileSync,
+  writeSync,
 } from 'node:fs';
 import { isAbsolute, join } from 'node:path';
 import { crc32 } from 'node:zlib';
@@ -170,22 +170,40 @@ export class SheetCache {
 
   /** Keep the sheet under this key. Never fails the command. */
   put(key: string, sheet: Sheet): void {
+    let temporary: string | undefined;
+    let fd: number | undefined;
     try {
-      const data = encodeSheet(sheet, key);
-      if (data.length > this.maxBytes / 4) return;
+      // Most of an entry is its points; a sheet that would take more than
+      // a quarter of the cache is not kept.
+      if (pointsOf(sheet) * 8 > this.maxBytes / 4) return;
       const path = join(this.dir, `${key}.sheet`);
       // Written whole under another name, then moved into place, so a
       // command running beside this one never reads half an entry.
-      const temporary = `${path}.${randomBytes(6).toString('hex')}.tmp`;
-      writeFileSync(temporary, data, { mode: 0o600, flag: 'wx' });
-      try {
-        renameSync(temporary, path);
-      } catch (error) {
-        unlinkSync(temporary);
-        throw error;
-      }
+      temporary = `${path}.${randomBytes(6).toString('hex')}.tmp`;
+      fd = openSync(temporary, 'wx', 0o600);
+      const out = fd;
+      let at = 0;
+      const write = (bytes: Uint8Array) => {
+        writeAll(out, bytes, at);
+        at += bytes.length;
+      };
+      write(new Uint8Array(HEADER));
+      const w = new Writer(write);
+      writeSheet(sheet, w);
+      if (HEADER + w.size > this.maxBytes / 4) return;
+      writeAll(out, headerOf(w.size, w.crc, key), 0);
+      closeSync(out);
+      fd = undefined;
+      renameSync(temporary, path);
+      temporary = undefined;
       this.prune();
-    } catch {}
+    } catch {
+    } finally {
+      try {
+        if (fd !== undefined) closeSync(fd);
+        if (temporary !== undefined) unlinkSync(temporary);
+      } catch {}
+    }
   }
 
   /** Drop the least recently used entries past the size and the count. */
@@ -217,6 +235,13 @@ export class SheetCache {
   }
 }
 
+/** Write all of `bytes` at `position`, however many calls it takes. */
+function writeAll(fd: number, bytes: Uint8Array, position: number): void {
+  let done = 0;
+  while (done < bytes.length)
+    done += writeSync(fd, bytes, done, bytes.length - done, position + done);
+}
+
 // An entry: a header, the text as JSON, then each number column as an
 // array of its own, every part starting on a multiple of 8 bytes.
 //
@@ -231,18 +256,29 @@ interface Text {
   skipped: string[];
 }
 
-class Writer {
-  private readonly parts: Uint8Array[] = [];
-  private size = 0;
+/** Where an entry's bytes go, in order: memory or a file. */
+type Sink = (bytes: Uint8Array) => void;
 
-  private push(bytes: Uint8Array): void {
-    this.parts.push(bytes);
+class Writer {
+  size = 0;
+  crc = 0;
+  private readonly sink: Sink;
+
+  constructor(sink: Sink) {
+    this.sink = sink;
+  }
+
+  private emit(bytes: Uint8Array): void {
+    this.sink(bytes);
+    this.crc = crc32(bytes, this.crc);
     this.size += bytes.length;
+  }
+
+  /** Bytes, then zeros to the next multiple of 8. */
+  push(bytes: Uint8Array): void {
+    this.emit(bytes);
     const pad = (8 - (this.size % 8)) % 8;
-    if (pad) {
-      this.parts.push(new Uint8Array(pad));
-      this.size += pad;
-    }
+    if (pad) this.emit(new Uint8Array(pad));
   }
 
   u32(values: number[]): void {
@@ -260,10 +296,6 @@ class Writer {
     const bytes = Buffer.from(JSON.stringify(value), 'utf8');
     this.u32([bytes.length]);
     this.push(bytes);
-  }
-
-  done(): Uint8Array {
-    return Buffer.concat(this.parts, this.size);
   }
 }
 
@@ -333,11 +365,35 @@ class Reader {
   }
 }
 
+/** The header of an entry whose payload is `size` bytes. */
+function headerOf(size: number, crc: number, key?: string): Uint8Array {
+  const out = new Uint8Array(HEADER);
+  const head = new DataView(out.buffer);
+  head.setUint32(0, MAGIC, true);
+  head.setUint32(4, FORMAT, true);
+  head.setUint32(8, size, true);
+  head.setUint32(12, crc, true);
+  if (key) out.set(Buffer.from(key, 'hex').subarray(0, 32), 16);
+  return out;
+}
+
 /** The sheet as an entry, kept under `key` (64 hex digits) when given. */
 export function encodeSheet(sheet: Sheet, key?: string): Uint8Array {
-  const w = new Writer();
-  // Room for the header, filled in at the end.
-  w.u32(new Array(HEADER / 4).fill(0));
+  const parts: Uint8Array[] = [];
+  // Copied: the points are written through one reused buffer.
+  const w = new Writer((bytes) => parts.push(bytes.slice()));
+  writeSheet(sheet, w);
+  return Buffer.concat([headerOf(w.size, w.crc, key), ...parts]);
+}
+
+/** How many numbers a sheet's strokes hold. */
+const pointsOf = (sheet: Sheet): number => {
+  let total = 0;
+  for (const s of sheet.strokes) total += s.pts.length;
+  return total;
+};
+
+function writeSheet(sheet: Sheet, w: Writer): void {
   const text: Text = {
     layers: sheet.layers,
     labels: sheet.labels.map((l) => [l.text, l.raw, l.source]),
@@ -355,43 +411,66 @@ export function encodeSheet(sheet: Sheet, key?: string): Uint8Array {
       sheet.pictureShare,
     ]),
   );
+  // Filled in plain loops: a typed array made with a mapping function is
+  // many times slower, and a large sheet has hundreds of thousands of rows.
   const strokes = sheet.strokes;
-  w.column(Int32Array.from(strokes, (s) => s.layer));
-  w.column(Uint32Array.from(strokes, (s) => s.color));
-  w.column(Float64Array.from(strokes, (s) => s.width));
-  w.column(Uint8Array.from(strokes, (s) => (s.dashed ? 1 : 0)));
-  w.column(Uint32Array.from(strokes, (s) => s.pts.length));
-  let total = 0;
-  for (const s of strokes) total += s.pts.length;
-  const pts = new Float64Array(total);
-  let at = 0;
-  for (const s of strokes) {
-    pts.set(s.pts, at);
-    at += s.pts.length;
+  const ns = strokes.length;
+  const layer = new Int32Array(ns);
+  const color = new Uint32Array(ns);
+  const width = new Float64Array(ns);
+  const dashed = new Uint8Array(ns);
+  const lengths = new Uint32Array(ns);
+  for (let i = 0; i < ns; i++) {
+    const s = strokes[i] as Stroke;
+    layer[i] = s.layer;
+    color[i] = s.color;
+    width[i] = s.width;
+    dashed[i] = s.dashed ? 1 : 0;
+    lengths[i] = s.pts.length;
   }
-  w.column(pts);
+  for (const column of [layer, color, width, dashed, lengths]) w.column(column);
+  // The points, the bulk of an entry, through a buffer of a megabyte, so a
+  // large sheet is not copied whole once more.
+  const total = pointsOf(sheet);
+  w.u32([total]);
+  const chunk = new Float64Array(Math.min(total, 131_072));
+  let used = 0;
+  for (const s of strokes) {
+    const p = s.pts;
+    for (let k = 0; k < p.length; k++) {
+      chunk[used++] = p[k] as number;
+      if (used === chunk.length) {
+        w.push(new Uint8Array(chunk.buffer));
+        used = 0;
+      }
+    }
+  }
+  if (used) w.push(new Uint8Array(chunk.buffer, 0, used * 8));
   const fills = sheet.fills;
-  w.column(Int32Array.from(fills, (f) => f.layer));
-  w.column(Uint32Array.from(fills, (f) => f.color));
-  w.column(
-    Float64Array.from(fills.flatMap((f) => [f.x0, f.y0, f.x1, f.y1, f.area])),
-  );
+  const fillLayer = new Int32Array(fills.length);
+  const fillColor = new Uint32Array(fills.length);
+  const fillBox = new Float64Array(fills.length * 5);
+  fills.forEach((f, i) => {
+    fillLayer[i] = f.layer;
+    fillColor[i] = f.color;
+    fillBox.set([f.x0, f.y0, f.x1, f.y1, f.area], i * 5);
+  });
+  for (const column of [fillLayer, fillColor, fillBox]) w.column(column);
   const labels = sheet.labels;
-  w.column(Int32Array.from(labels, (l) => l.layer));
-  w.column(Uint8Array.from(labels, (l) => (l.vertical ? 1 : 0)));
-  w.column(Float64Array.from(labels.flatMap((l) => [l.x0, l.y0, l.x1, l.y1])));
-  w.column(
-    Float64Array.from(sheet.pictures.flatMap((p) => [p.x0, p.y0, p.x1, p.y1])),
-  );
-  const out = w.done();
-  const payload = out.subarray(HEADER);
-  const head = new DataView(out.buffer, out.byteOffset, HEADER);
-  head.setUint32(0, MAGIC, true);
-  head.setUint32(4, FORMAT, true);
-  head.setUint32(8, payload.length, true);
-  head.setUint32(12, crc32(payload), true);
-  if (key) out.set(Buffer.from(key, 'hex').subarray(0, 32), 16);
-  return out;
+  const labelLayer = new Int32Array(labels.length);
+  const vertical = new Uint8Array(labels.length);
+  const labelBox = new Float64Array(labels.length * 4);
+  labels.forEach((l, i) => {
+    labelLayer[i] = l.layer;
+    vertical[i] = l.vertical ? 1 : 0;
+    labelBox.set([l.x0, l.y0, l.x1, l.y1], i * 4);
+  });
+  for (const column of [labelLayer, vertical, labelBox]) w.column(column);
+  const pictures = new Float64Array(sheet.pictures.length * 4);
+  sheet.pictures.forEach((p, i) => {
+    pictures.set([p.x0, p.y0, p.x1, p.y1], i * 4);
+  });
+  w.column(pictures);
 }
 
 /** The key an entry was kept under, in hex. */
