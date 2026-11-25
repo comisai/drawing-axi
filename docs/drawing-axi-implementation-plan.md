@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| Status | T1 to T30 done (2026-11-20): the tool, releases 0.1.0 to 0.1.4, the Comis pack and the live scenario. Version 0.2.0 is prepared for release. §7.3 lists follow-up work. |
+| Status | T1 to T30 done (2026-11-20): the tool, releases 0.1.0 to 0.2.0, the Comis pack and the live scenario. Version 0.2.1 is prepared for release. §7.3 lists follow-up work. |
 | Date | 2026-11-20 |
 | Design | `drawing-axi-design.md` |
 | Master plan | `drawing-axi-master-plan.md` (milestones, gates, owner actions) |
@@ -218,6 +218,7 @@ A fresh worker drafted a bill of quantities from a real level (a ceiling sheet a
 | Layers | Some grayscale plots have no layers and different systems share the same color | In 0.2.0, split and select strokes by line width and dash pattern |
 | Scale | A detected scale bar can disagree with the stated ratio | In 0.2.0, report both factors and keep the stated ratio when they differ by more than 2% unless a separate dimension confirms the bar |
 | Preview and help | Workers had to convert SVGs to images and call help for each command | In 0.2.0, render model-sized PNGs directly and use `help --all` for the full command and output reference |
+| Performance | Each command parsed the same sheet again, and `layers --split` took longer on sheets with dense hatching | In 0.2.1, cache parsed geometry by file hash and limit run joining to nearby strokes |
 
 Three more workers took real levels from two offices in 0.1.1, blind to the people's bills. Their notes led to 0.1.2:
 
