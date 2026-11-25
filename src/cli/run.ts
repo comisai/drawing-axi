@@ -94,7 +94,8 @@ export const COMMANDS: readonly CommandSpec[] = [
     name: 'scale',
     args: FILE,
     flags: { page: PAGE_FLAG, ...SCALE_FLAGS, save: SAVE_FLAG },
-    summary: "The sheet's scale and how it was found",
+    summary:
+      'The scale used and why, with the bar length, label, and factor. A difference over 2% needs a confirming dimension',
     run: scale,
   },
   {
