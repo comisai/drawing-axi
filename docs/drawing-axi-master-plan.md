@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| Status | `drawing-axi` 0.1.4 is on npm with signed provenance. Version 0.2.0 is prepared for release. It is tested on 27 real sheets from three design offices: two offices' plots measure within 10% of people's bills at the default settings; the third office's prints are pictures, and the tool now says so. The Comis apps pack pins it, and a real model through the whole Comis stack drafted a real level's bill of quantities and answered nine Hebrew questions about the drawings. Next: the owner's own install (M9), and the work list in the implementation plan §7.3. |
+| Status | `drawing-axi` 0.2.0 is on npm with signed provenance. Version 0.2.1 is prepared for release. It is tested on 27 real sheets from three design offices: two offices' plots measure within 10% of people's bills at the default settings; the third office's prints are pictures, and the tool now says so. The Comis apps pack pins it, and a real model through the whole Comis stack drafted a real level's bill of quantities and answered nine Hebrew questions about the drawings. Next: the owner's own install (M9), and the work list in the implementation plan §7.3. |
 | Date | 2026-11-20 |
 | Design | `drawing-axi-design.md` |
 | Implementation plan | `drawing-axi-implementation-plan.md` (tasks T1 to T30, test plan) |
@@ -47,7 +47,8 @@ Updated 2026-11-20.
 | Other design offices | **Done** | Two more offices' drawings came with people's bills (A2). One plots like the first; its findings led to 0.1.2. The other sends prints through a PDF printer, which cannot be measured; the tool says so and asks for the CAD plot |
 | Edge cases | **Done** | Every command on truncated, byte-flipped, empty, encrypted and renamed files, a joined two-sheet file, a right-to-left file name and a 200-character name: each ends in a known error in about 0.1 s, or works. The joined file lost its layers; fixed in 0.1.3 |
 | Release 0.1.4 | **Released** | Recovers PDF labels with missing or unusable font text maps, including legacy Hebrew fonts. `labels` and its saved JSON report text the reader still cannot decode |
-| Release 0.2.0 | **Prepared** | Splits and selects strokes by width and dash pattern, reports discrepancies between the scale bar and stated ratio, renders PNG previews directly, and adds the complete CLI help and output reference |
+| Release 0.2.0 | **Released** | Splits and selects strokes by width and dash pattern, reports discrepancies between the scale bar and stated ratio, renders PNG previews directly, and adds the complete CLI help and output reference |
+| Release 0.2.1 | **Prepared** | Caches parsed geometry by file hash and speeds up `layers --split` on sheets with dense hatching |
 
 ## 3. Workstreams
 
